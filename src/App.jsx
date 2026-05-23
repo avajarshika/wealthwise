@@ -295,7 +295,7 @@ function AddSheet({title,onSave,onClose,hasCategory}) {
   </div>;
 }
 
-function MoneyTab({data,setData}) {
+function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
   const [docs,setDocs]=useState(Array.from({length:12},()=>[]));const docRef=useRef();
   const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
@@ -328,7 +328,7 @@ function MoneyTab({data,setData}) {
       ?<div className="empty-card" onClick={()=>{if(userPlan==="free"){onPaywall("อัปโหลดเอกสาร");}else{docRef.current.click();}}}>แตะเพื่อแนบสลิป ใบแจ้งหนี้ หรือเอกสาร →</div>
       :<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:10}}>
         {docs[sel].map(d=><div key={d.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:11,padding:"10px 13px",display:"flex",alignItems:"center",gap:9}}>
-          <span style={{fontSize:20,flexShrink:0}}>{d.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)?"🖼️":d.name.match(/\.pdf$/i)?"📄":"📎"}</span>
+          <span style={{fontSize:20,flexShrink:0}}>{(()=>{const n=d.name.toLowerCase();return n.endsWith(".jpg")||n.endsWith(".jpeg")||n.endsWith(".png")||n.endsWith(".gif")||n.endsWith(".webp")?"🖼️":n.endsWith(".pdf")?"📄":"📎";})()}</span>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:"#2C2510",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</div><div style={{fontSize:10,color:"#A89660",marginTop:1}}>{d.size} · {d.date}</div></div>
           <a href={d.dataUrl} download={d.name}><button style={{background:"#FFF3C4",border:"none",color:"#B8860B",fontSize:11,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>⬇</button></a>
           <button className="del-btn" onClick={()=>setDocs(prev=>prev.map((arr,i)=>i===sel?arr.filter(x=>x.id!==d.id):arr))}>🗑</button>
