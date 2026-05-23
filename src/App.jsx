@@ -1629,7 +1629,7 @@ function ProfileTab({user, onLogout, lang}) {
 
 // ── Shell (pre-login wrapper) ────────────────────────────────────────
 function Shell({children, lang}) {
-  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden",position:"relative"}}>
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden",position:"relative",width:"100%"}}>
 
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
@@ -1648,17 +1648,17 @@ function Shell({children, lang}) {
       .ob-t3{font-size:13px;color:#A89660;line-height:1.75;max-width:290px;margin-bottom:32px;}
       .ob-btn{width:100%;max-width:300px;background:#2C2510;color:#FFF3C4;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;margin-bottom:10px;}
       .ob-skip{background:none;border:none;color:#C4B88A;font-size:12px;font-weight:600;cursor:pointer;font-family:'Sarabun',sans-serif;padding:6px;}
-      .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 20px 30px;position:relative;}
+      .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 16px 30px;position:relative;width:100%;box-sizing:border-box;}
       .ldeco{position:absolute;top:0;left:0;right:0;height:230px;overflow:hidden;pointer-events:none;}
       .ldc{position:absolute;border-radius:50%;}
       .c1{width:200px;height:200px;top:-80px;right:-50px;background:linear-gradient(135deg,#FFF3C4,#FFE08A44);}
       .c2{width:130px;height:130px;top:50px;left:-45px;background:linear-gradient(135deg,#FFF8DC,#EDE8D8);}
       .c3{width:70px;height:70px;top:130px;right:28px;background:#FFF3C444;}
-      .lbrand{display:flex;flex-direction:column;align-items:center;padding-top:66px;margin-bottom:22px;position:relative;z-index:1;}
+      .lbrand{display:flex;flex-direction:column;align-items:center;padding-top:52px;margin-bottom:20px;position:relative;z-index:1;width:100%;}
       .licon{width:62px;height:62px;background:#E8B84B;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:31px;margin-bottom:10px;box-shadow:0 6px 18px rgba(232,184,75,.3);}
       .ltitle{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#2C2510;margin-bottom:3px;}
       .lsub{font-size:11px;color:#A89660;}
-      .lcard{background:#FFF;border-radius:20px;border:1.5px solid #EDE8D8;padding:18px;width:100%;box-shadow:0 4px 22px rgba(44,37,16,.06);position:relative;z-index:1;}
+      .lcard{background:#FFF;border-radius:20px;border:1.5px solid #EDE8D8;padding:18px;width:100%;box-shadow:0 4px 22px rgba(44,37,16,.06);position:relative;z-index:1;box-sizing:border-box;}
       .gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:12px;font-size:13px;font-weight:700;color:#2C2510;cursor:pointer;font-family:'Sarabun',sans-serif;margin-bottom:13px;transition:all .2s;}
       .gbtn:hover{border-color:#D4C99A;}
       .gbtn-load{opacity:.7;cursor:not-allowed;}
@@ -1677,7 +1677,7 @@ function Shell({children, lang}) {
       .lbtn{width:100%;background:#2C2510;color:#FFF3C4;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
       .lbtn-load{opacity:.65;}
       .lforgot{text-align:center;margin-top:11px;font-size:12px;color:#C4B88A;cursor:pointer;font-weight:600;}
-      .guest-btn{width:100%;display:flex;align-items:center;gap:11px;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:15px;padding:13px 15px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-top:10px;position:relative;z-index:1;transition:all .2s;text-align:left;}
+      .guest-btn{width:100%;display:flex;align-items:center;gap:11px;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:15px;padding:13px 15px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-top:10px;position:relative;z-index:1;transition:all .2s;text-align:left;box-sizing:border-box;}
       .guest-btn:hover{border-color:#D4C99A;}
       .guest-icon{font-size:21px;flex-shrink:0;}
       .guest-txt{flex:1;}
