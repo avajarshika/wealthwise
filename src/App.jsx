@@ -81,6 +81,7 @@ const GOAL_PRESETS = [
   {emoji:"💼",label:"ทุนธุรกิจ"},{emoji:"🏖️",label:"เที่ยวในประเทศ"},
   {emoji:"🌟",label:"อื่นๆ"},
 ];
+const OWNER_EMAIL = "aonlovejdr11@gmail.com";
 const fmt = n => Math.round(n||0).toLocaleString("th-TH");
 const fmtK = n => n>=1000?`${(n/1000).toFixed(n%1000===0?0:1)}K`:fmt(n);
 
@@ -149,7 +150,7 @@ function Login({onLogin}) {
       if(error){setErr(error.message);setLoading(false);return;}
       if(data.user){
         await supabase.from("profiles").upsert({id:data.user.id,name:name||email.split("@")[0]});
-        onLogin(name||email.split("@")[0]);
+        onLogin(name||email.split("@")[0], data.user.id, email);
       }
     } else {
       const {data,error}=await supabase.auth.signInWithPassword({email,password:pass});
@@ -993,6 +994,8 @@ export default function App() {
         supabase.from("profiles").select("name").eq("id",session.user.id).single().then(({data:p})=>{
           setUser(p?.name||session.user.email.split("@")[0]);
           setUserId(session.user.id);
+          setUserEmail(session.user.email);
+          if(session.user.email===OWNER_EMAIL) setUserPlan("proplus");
           setScreen("app");
           loadUserData(session.user.id);
         });
@@ -1039,12 +1042,13 @@ export default function App() {
     {key:"summary",icon:"📊", label:"สรุปปี"},
   ];
   const [drawerOpen,setDrawerOpen]=useState(false);
+  const [userEmail,setUserEmail]=useState(null);
   const [paywallFeature,setPaywallFeature]=useState(null);
   const [userPlan,setUserPlan]=useState("free"); // free | pro | proplus
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
   const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setScreen("login");};
   if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
-  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang}><Login onLogin={(u,uid)=>{setUser(u);setUserId(uid);setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
+  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang}><Login onLogin={(u,uid,email)=>{setUser(u);setUserId(uid);setUserEmail(email);if(email===OWNER_EMAIL)setUserPlan("proplus");setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
   return <LangContext.Provider value={lang}><div className="app">
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
@@ -1444,7 +1448,8 @@ export default function App() {
           <button onClick={()=>setDrawerOpen(false)} style={{position:"absolute",top:12,right:12,background:"#ffffff22",border:"none",color:"#FFF3C4",width:30,height:30,borderRadius:"50%",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
           <div style={{width:56,height:56,background:"#E8B84B",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,marginBottom:12}}>👤</div>
           <div style={{fontSize:16,fontWeight:800,color:"#FFF3C4",marginBottom:3}}>{user||"ผู้ทดลองใช้"}</div>
-          <div style={{fontSize:11,color:"#A89660",marginBottom:10}}>WealthWise Member</div>
+          <div style={{fontSize:11,color:"#A89660",marginBottom:6}}>WealthWise Member</div>
+          {userEmail===OWNER_EMAIL&&<div style={{fontSize:10,background:"#E8B84B",color:"#2C2510",padding:"2px 10px",borderRadius:20,fontWeight:800,display:"inline-block",marginBottom:8}}>👑 Owner</div>}
           {/* Plan badge */}
           <div style={{display:"inline-flex",alignItems:"center",gap:6,background:userPlan==="free"?"#4A3E22":userPlan==="pro"?"#E8B84B":"#7A4FA0",borderRadius:20,padding:"4px 12px"}}>
             <span style={{fontSize:11}}>{userPlan==="free"?"🎁":userPlan==="pro"?"⭐":"💎"}</span>
