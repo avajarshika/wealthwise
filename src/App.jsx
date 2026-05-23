@@ -1,4 +1,64 @@
-import { useState, useRef } from "react";
+import { useState, useRef, createContext, useContext } from "react";
+
+// ── Language System ──────────────────────────────────────────────────
+const LangContext = createContext("th");
+const useLang = () => useContext(LangContext);
+
+const T = {
+  // App name & header
+  appName:        {th:"ภาษีฟรีแลนซ์",       en:"Freelance Tax"},
+  appSub:         {th:"จัดการเงิน · ภาษี · การลงทุน", en:"Money · Tax · Investment"},
+  hello:          {th:"สวัสดี",              en:"Hello"},
+  year:           {th:"ปี",                  en:"Year"},
+  // Tabs
+  tabLearn:       {th:"เรียนรู้",            en:"Learn"},
+  tabMoney:       {th:"เงิน",               en:"Money"},
+  tabPlan:        {th:"วางแผน",             en:"Plan"},
+  tabGoals:       {th:"เป้าหมาย",           en:"Goals"},
+  tabSummary:     {th:"สรุป",               en:"Summary"},
+  // Login
+  signIn:         {th:"เข้าสู่ระบบ",        en:"Sign In"},
+  register:       {th:"สมัครสมาชิก",        en:"Register"},
+  signInGoogle:   {th:"เข้าสู่ระบบด้วย Google", en:"Sign in with Google"},
+  registerGoogle: {th:"สมัครด้วย Google",   en:"Register with Google"},
+  orEmail:        {th:"หรือใช้อีเมล",       en:"or use email"},
+  yourName:       {th:"ชื่อของคุณ",         en:"Your name"},
+  email:          {th:"อีเมล",              en:"Email"},
+  password:       {th:"รหัสผ่าน",           en:"Password"},
+  forgotPass:     {th:"ลืมรหัสผ่าน?",      en:"Forgot password?"},
+  guestLabel:     {th:"ทดลองใช้แบบไม่ต้องสมัคร", en:"Try without signing up"},
+  guestSub:       {th:"เข้าดูเนื้อหาได้ทั้งหมด ไม่มีข้อผูกมัด", en:"Full access, no commitment"},
+  privacy:        {th:"🔒 ข้อมูลของคุณปลอดภัยและเป็นส่วนตัว", en:"🔒 Your data is safe and private"},
+  // Onboarding
+  ob1Title:       {th:"เข้าใจภาษีง่ายๆ",   en:"Understand Tax Easily"},
+  ob1Sub:         {th:"ไม่ต้องมีพื้นฐาน",  en:"No background needed"},
+  ob1Desc:        {th:"แอปนี้จะอธิบายเรื่องภาษีฟรีแลนซ์ให้เข้าใจได้ใน 5 นาที", en:"This app explains freelance tax in 5 minutes"},
+  ob2Title:       {th:"ติดตามการเงิน",      en:"Track Your Money"},
+  ob2Sub:         {th:"รายได้ — ค่าใช้จ่าย", en:"Income — Expenses"},
+  ob2Desc:        {th:"บันทึกรายรับ-รายจ่ายทุกเดือน เห็นชัดว่าเงินไปไหน", en:"Record monthly income & expenses, see where money goes"},
+  ob3Title:       {th:"วางแผน & ความฝัน",   en:"Plan & Dream"},
+  ob3Sub:         {th:"เงินเหลือ → ลงทุน → เป้าหมาย", en:"Surplus → Invest → Goals"},
+  ob3Desc:        {th:"รู้ว่าเงินที่เหลือควรเอาไปไว้ที่ไหน และเก็บเงินเพื่อความฝันของคุณ", en:"Know where to put your extra money and save for your dreams"},
+  next:           {th:"ถัดไป →",            en:"Next →"},
+  skip:           {th:"ข้าม",               en:"Skip"},
+  start:          {th:"เริ่มใช้งาน →",      en:"Get Started →"},
+  // Common
+  calculate:      {th:"คำนวณ",              en:"Calculate"},
+  close:          {th:"ปิด",                en:"Close"},
+  add:            {th:"+ เพิ่ม",            en:"+ Add"},
+  save:           {th:"บันทึก",             en:"Save"},
+  cancel:         {th:"ยกเลิก",             en:"Cancel"},
+  delete:         {th:"ลบ",                 en:"Delete"},
+  baht:           {th:"฿",                  en:"฿"},
+  perMonth:       {th:"เดือนละ",            en:"/mo"},
+  perYear:        {th:"ต่อปี",              en:"/yr"},
+  month:          {th:"เดือน",              en:"mo"},
+  months:         {th:"เดือน",              en:"months"},
+};
+
+function t(key, lang) {
+  return T[key]?.[lang] ?? T[key]?.th ?? key;
+}
 
 const MONTHS_TH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const MONTH_FULL = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
@@ -53,52 +113,54 @@ function GIcon() {
 }
 
 // ── Onboarding ───────────────────────────────────────────────────────
-const SLIDES=[
-  {emoji:"💡",title:"เข้าใจภาษีง่ายๆ",sub:"ไม่ต้องมีพื้นฐาน",desc:"แอปนี้จะอธิบายเรื่องภาษีฟรีแลนซ์ให้เข้าใจได้ใน 5 นาที"},
-  {emoji:"💰",title:"ติดตามการเงิน",sub:"รายได้ — ค่าใช้จ่าย",desc:"บันทึกรายรับ-รายจ่ายทุกเดือน เห็นชัดว่าเงินไปไหน"},
-  {emoji:"🌟",title:"วางแผน & ความฝัน",sub:"เงินเหลือ → ลงทุน → เป้าหมาย",desc:"รู้ว่าเงินที่เหลือควรเอาไปไว้ที่ไหน และเก็บเงินเพื่อความฝันของคุณ"},
-];
 function Onboarding({onDone}) {
+  const lang=useLang();
+  const SLIDES=[
+    {emoji:"💡",title:t("ob1Title",lang),sub:t("ob1Sub",lang),desc:t("ob1Desc",lang)},
+    {emoji:"💰",title:t("ob2Title",lang),sub:t("ob2Sub",lang),desc:t("ob2Desc",lang)},
+    {emoji:"🌟",title:t("ob3Title",lang),sub:t("ob3Sub",lang),desc:t("ob3Desc",lang)},
+  ];
   const [i,setI]=useState(0);const [fade,setFade]=useState(false);const s=SLIDES[i];
   const go=()=>{if(i===SLIDES.length-1){onDone();return;}setFade(true);setTimeout(()=>{setI(i+1);setFade(false);},180);};
   return <div className="ob"><div className={`ob-body ${fade?"ob-fade":""}`}>
     <div className="ob-ring"><span className="ob-em">{s.emoji}</span></div>
     <div className="ob-dots">{SLIDES.map((_,j)=><div key={j} className={`od ${j===i?"od-on":""}`}/>)}</div>
     <div className="ob-t1">{s.title}</div><div className="ob-t2">{s.sub}</div><div className="ob-t3">{s.desc}</div>
-    <button className="ob-btn" onClick={go}>{i===SLIDES.length-1?"เริ่มใช้งาน →":"ถัดไป →"}</button>
-    {i<SLIDES.length-1&&<button className="ob-skip" onClick={onDone}>ข้าม</button>}
+    <button className="ob-btn" onClick={go}>{i===SLIDES.length-1?t("start",lang):t("next",lang)}</button>
+    {i<SLIDES.length-1&&<button className="ob-skip" onClick={onDone}>{t("skip",lang)}</button>}
   </div></div>;
 }
 
 // ── Login ────────────────────────────────────────────────────────────
 function Login({onLogin}) {
+  const lang=useLang();
   const [mode,setMode]=useState("login");const [name,setName]=useState("");const [email,setEmail]=useState("");
   const [pass,setPass]=useState("");const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
   const [gLoad,setGLoad]=useState(false);const [gStep,setGStep]=useState("");
   const handleGoogle=()=>{setGLoad(true);setErr("");setGStep("picking");setTimeout(()=>{setGStep("auth");setTimeout(()=>{setGLoad(false);onLogin("นักพัฒนา ฟรีแลนซ์");},700);},1400);};
-  const submit=()=>{setErr("");if(mode==="register"&&!name.trim()){setErr("กรุณาใส่ชื่อ");return;}if(!email.includes("@")){setErr("อีเมลไม่ถูกต้อง");return;}if(pass.length<6){setErr("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return;}setLoading(true);setTimeout(()=>{setLoading(false);onLogin(name||email.split("@")[0]);},900);};
+  const submit=()=>{setErr("");if(mode==="register"&&!name.trim()){setErr(lang==="th"?"กรุณาใส่ชื่อ":"Please enter your name");return;}if(!email.includes("@")){setErr(lang==="th"?"อีเมลไม่ถูกต้อง":"Invalid email");return;}if(pass.length<6){setErr(lang==="th"?"รหัสผ่านต้องมีอย่างน้อย 6 ตัว":"Password must be at least 6 characters");return;}setLoading(true);setTimeout(()=>{setLoading(false);onLogin(name||email.split("@")[0]);},900);};
   return <div className="lw">
     <div className="ldeco"><div className="ldc c1"/><div className="ldc c2"/><div className="ldc c3"/></div>
-    <div className="lbrand"><div className="licon">🧾</div><div className="ltitle">ภาษีฟรีแลนซ์</div><div className="lsub">จัดการเงิน · ภาษี · การลงทุน</div></div>
+    <div className="lbrand"><div className="licon">🧾</div><div className="ltitle">{t("appName",lang)}</div><div className="lsub">{t("appSub",lang)}</div></div>
     <div className="lcard">
       <button className={`gbtn ${gLoad?"gbtn-load":""}`} onClick={handleGoogle} disabled={gLoad||loading}>
-        {gLoad?(<><span className="gspin"/><span>{gStep==="picking"?"กำลังเลือกบัญชี...":"กำลังเข้าสู่ระบบ..."}</span></>):(<><GIcon/><span>{mode==="login"?"เข้าสู่ระบบด้วย Google":"สมัครด้วย Google"}</span></>)}
+        {gLoad?(<><span className="gspin"/><span>{gStep==="picking"?(lang==="th"?"กำลังเลือกบัญชี...":"Selecting account..."):(lang==="th"?"กำลังเข้าสู่ระบบ...":"Signing in...")}</span></>):(<><GIcon/><span>{mode==="login"?t("signInGoogle",lang):t("registerGoogle",lang)}</span></>)}
       </button>
-      <div className="lor"><div className="lorline"/><span className="lortext">หรือใช้อีเมล</span><div className="lorline"/></div>
-      <div className="ltabs"><button className={`ltb ${mode==="login"?"ltb-on":""}`} onClick={()=>{setMode("login");setErr("");}}>เข้าสู่ระบบ</button><button className={`ltb ${mode==="register"?"ltb-on":""}`} onClick={()=>{setMode("register");setErr("");}}>สมัครสมาชิก</button></div>
-      {mode==="register"&&<><label className="ll">ชื่อของคุณ</label><input className="li" placeholder="เช่น สมชาย ใจดี" value={name} onChange={e=>setName(e.target.value)}/></>}
-      <label className="ll">อีเมล</label><input className="li" type="email" placeholder="example@email.com" value={email} onChange={e=>setEmail(e.target.value)}/>
-      <label className="ll">รหัสผ่าน</label><input className="li" type="password" placeholder={mode==="register"?"อย่างน้อย 6 ตัวอักษร":"••••••••"} value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+      <div className="lor"><div className="lorline"/><span className="lortext">{t("orEmail",lang)}</span><div className="lorline"/></div>
+      <div className="ltabs"><button className={`ltb ${mode==="login"?"ltb-on":""}`} onClick={()=>{setMode("login");setErr("");}}>{t("signIn",lang)}</button><button className={`ltb ${mode==="register"?"ltb-on":""}`} onClick={()=>{setMode("register");setErr("");}}>{t("register",lang)}</button></div>
+      {mode==="register"&&<><label className="ll">{t("yourName",lang)}</label><input className="li" placeholder={lang==="th"?"เช่น สมชาย ใจดี":"e.g. John Smith"} value={name} onChange={e=>setName(e.target.value)}/></>}
+      <label className="ll">{t("email",lang)}</label><input className="li" type="email" placeholder="example@email.com" value={email} onChange={e=>setEmail(e.target.value)}/>
+      <label className="ll">{t("password",lang)}</label><input className="li" type="password" placeholder={mode==="register"?(lang==="th"?"อย่างน้อย 6 ตัวอักษร":"At least 6 characters"):"••••••••"} value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
       {err&&<div className="lerr">⚠️ {err}</div>}
-      <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading||gLoad}>{loading?<span className="gspin"/>:mode==="login"?"เข้าสู่ระบบ":"สมัครสมาชิก"}</button>
-      {mode==="login"&&<div className="lforgot">ลืมรหัสผ่าน?</div>}
+      <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading||gLoad}>{loading?<span className="gspin"/>:mode==="login"?t("signIn",lang):t("register",lang)}</button>
+      {mode==="login"&&<div className="lforgot">{t("forgotPass",lang)}</div>}
     </div>
-    <button className="guest-btn" onClick={()=>onLogin("ผู้ทดลองใช้")} disabled={loading||gLoad}>
+    <button className="guest-btn" onClick={()=>onLogin(lang==="th"?"ผู้ทดลองใช้":"Guest")} disabled={loading||gLoad}>
       <span className="guest-icon">👀</span>
-      <div className="guest-txt"><div className="guest-lbl">ทดลองใช้แบบไม่ต้องสมัคร</div><div className="guest-sub">เข้าดูเนื้อหาได้ทั้งหมด ไม่มีข้อผูกมัด</div></div>
+      <div className="guest-txt"><div className="guest-lbl">{t("guestLabel",lang)}</div><div className="guest-sub">{t("guestSub",lang)}</div></div>
       <span className="guest-arr">→</span>
     </button>
-    <div className="lfooter">🔒 ข้อมูลของคุณปลอดภัยและเป็นส่วนตัว</div>
+    <div className="lfooter">{t("privacy",lang)}</div>
   </div>;
 }
 
@@ -825,15 +887,21 @@ function SummaryTab({data,goals,savings}) {
 }
 
 // ── Root App ─────────────────────────────────────────────────────────
-const TABS=[{key:"learn",icon:"💡",label:"เรียนรู้"},{key:"money",icon:"💰",label:"การเงิน"},{key:"plan",icon:"🌱",label:"วางแผน"},{key:"goals",icon:"🌟",label:"ความฝัน"},{key:"summary",icon:"📊",label:"สรุปปี"}];
-
 export default function App() {
   const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [tab,setTab]=useState("learn");
   const [data,setData]=useState(initData());const [goals,setGoals]=useState([]);const [savings,setSavings]=useState({});
+  const [lang,setLang]=useState("th");
+  const TABS=[
+    {key:"learn",  icon:"💡",label:lang==="th"?"เรียนรู้":"Learn"},
+    {key:"money",  icon:"💰",label:lang==="th"?"การเงิน":"Money"},
+    {key:"plan",   icon:"🌱",label:lang==="th"?"วางแผน":"Plan"},
+    {key:"goals",  icon:"🌟",label:lang==="th"?"ความฝัน":"Goals"},
+    {key:"summary",icon:"📊",label:lang==="th"?"สรุปปี":"Summary"},
+  ];
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
-  if(screen==="onboard")return <Shell><Onboarding onDone={()=>setScreen("login")}/></Shell>;
-  if(screen==="login")  return <Shell><Login onLogin={u=>{setUser(u);setScreen("app");}}/></Shell>;
-  return <div className="app">
+  if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
+  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Login onLogin={u=>{setUser(u);setScreen("app");}}/></Shell></LangContext.Provider>;
+  return <LangContext.Provider value={lang}><div className="app">
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0;}
@@ -1227,8 +1295,8 @@ export default function App() {
     `}</style>
     <div className="hdr">
       <div className="hdr-top">
-        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">ภาษีฟรีแลนซ์</div>{user&&<div className="hdr-user">สวัสดี, {user} 👋</div>}</div></div>
-        <div className="hdr-right"><div className="hdr-year">ปี {YEAR_TH}</div><button className="hdr-out" onClick={()=>setScreen("login")}>↩</button></div>
+        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">{lang==="th"?"ภาษีฟรีแลนซ์":"Freelance Tax"}</div>{user&&<div className="hdr-user">{lang==="th"?"สวัสดี":"Hello"}, {user} 👋</div>}</div></div>
+        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,marginRight:4}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button><button className="hdr-out" onClick={()=>setScreen("login")}>↩</button></div>
       </div>
       <div className="hdr-tabs">{TABS.map(t=><button key={t.key} className={`htab ${tab===t.key?"on":""}`} onClick={()=>setTab(t.key)}><span className="htab-icon">{t.icon}</span><span>{t.label}</span></button>)}</div>
     </div>
@@ -1238,12 +1306,15 @@ export default function App() {
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings}/>}
     <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
-  </div>;
+  </div></LangContext.Provider>;
 }
 
 // ── Shell (pre-login wrapper) ────────────────────────────────────────
-function Shell({children}) {
-  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden"}}>
+function Shell({children, lang, setLang}) {
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden",position:"relative"}}>
+    <button onClick={()=>setLang(l=>l==="th"?"en":"th")} style={{position:"fixed",top:12,right:12,zIndex:9999,background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:8,padding:"5px 11px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,boxShadow:"0 2px 8px rgba(44,37,16,.25)"}}>
+      {lang==="th"?"EN":"TH"}
+    </button>
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0;}
