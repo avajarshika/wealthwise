@@ -837,7 +837,7 @@ function RetirementPlanner({onClose, userId}) {
             if(userId){
               await supabase.from("retirement_plans").upsert({user_id:userId,age:parseInt(age),ret_age:parseInt(retAge),life_age:parseInt(lifeAge),expense:parseFloat(expense),current_savings:parseFloat(currentSavings||0),inflation:parseFloat(inflation),return_rate:parseFloat(returnRate),monthly_save:Math.round(result.monthlySave),total_needed:Math.round(result.totalNeeded),updated_at:new Date().toISOString()},{onConflict:"user_id"});
             }
-            alert("✅ บันทึกแผนเกษียณแล้ว!");
+            
           }}>💾 บันทึกแผนเกษียณ</button>
         </>)}
 
@@ -943,7 +943,7 @@ function SummaryTab({data,goals,savings,userPlan,onPaywall}) {
     {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
     {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
     <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
-    <button onClick={()=>{if(userPlan==="free"){onPaywall&&onPaywall("Export รายงาน PDF");}else{alert("📄 กำลังพัฒนาฟีเจอร์ Export PDF");}}} style={{width:"100%",background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:14}}>
+    <button onClick={()=>{if(userPlan==="free"){onPaywall&&onPaywall("Export รายงาน PDF");}else{}}} style={{width:"100%",background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>📄</span><div style={{textAlign:"left"}}><div style={{fontSize:14,fontWeight:800,color:"#2C2510"}}>Export รายงานปี {YEAR_TH}</div><div style={{fontSize:11,color:"#A89660",marginTop:2}}>{userPlan==="free"?"🔒 ต้องการแพ็กเกจ Pro":"สร้าง PDF สรุปรายปี"}</div></div></div>
       <span style={{fontSize:18,color:userPlan==="free"?"#C4B88A":"#E8B84B"}}>→</span>
     </button>
@@ -966,15 +966,13 @@ function PaywallPopup({feature, onClose, onUpgrade}) {
         {[
           {name:"Pro",price:"99฿",period:"/เดือน",color:"#E8B84B",popular:true},
           {name:"Pro+",price:"199฿",period:"/เดือน",color:"#7A4FA0"},
-        ].map(pl=><div key={pl.name} style={{flex:1,background:pl.color+"11",border:`1.5px solid ${pl.color}44`,borderRadius:14,padding:"12px 10px",textAlign:"center",cursor:"pointer",position:"relative"}} onClick={()=>{alert("🔒 ระบบชำระเงินกำลังพัฒนา
-เปิดให้ใช้เร็วๆ นี้!");onClose();}}>
+        ].map(pl=><div key={pl.name} style={{flex:1,background:pl.color+"11",border:`1.5px solid ${pl.color}44`,borderRadius:14,padding:"12px 10px",textAlign:"center",cursor:"pointer",position:"relative"}} onClick={()=>{onClose(); setPaywallFeature && setPaywallFeature("อัปเกรด");}}>
           {pl.popular&&<div style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",background:"#E8B84B",color:"#2C2510",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:10,whiteSpace:"nowrap"}}>ยอดนิยม</div>}
           <div style={{fontSize:15,fontWeight:800,color:pl.color,marginBottom:2}}>{pl.name}</div>
           <div style={{fontSize:20,fontWeight:800,color:"#2C2510"}}>{pl.price}<span style={{fontSize:11,color:"#A89660",fontWeight:400}}>{pl.period}</span></div>
         </div>)}
       </div>
-      <button style={{width:"100%",background:"#E8B84B",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:800,color:"#2C2510",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:10}} onClick={()=>{alert("🔒 ระบบชำระเงินกำลังพัฒนา
-เปิดให้ใช้เร็วๆ นี้!");onClose();}}>
+      <button style={{width:"100%",background:"#E8B84B",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:800,color:"#2C2510",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:10}} onClick={()=>{onClose(); setPaywallFeature && setPaywallFeature("อัปเกรด");}}>
         อัปเกรดเลย →
       </button>
       <button style={{width:"100%",background:"none",border:"none",color:"#A89660",fontSize:13,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}} onClick={onClose}>ยังไม่ตอนนี้</button>
@@ -1472,8 +1470,7 @@ export default function App() {
               {id:"free",name:"Free",price:"ฟรี",color:"#A89660",desc:"ฟีเจอร์พื้นฐาน"},
               {id:"pro",name:"Pro",price:"99฿/เดือน",color:"#E8B84B",desc:"ครบสำหรับฟรีแลนซ์",popular:true},
               {id:"proplus",name:"Pro+",price:"199฿/เดือน",color:"#7A4FA0",desc:"AI + ครบทุกฟีเจอร์"},
-            ].map(pl=><div key={pl.id} onClick={()=>{if(pl.id!=="free"){alert("🔒 ระบบชำระเงินกำลังพัฒนา
-เปิดให้ใช้เร็วๆ นี้!")}}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${userPlan===pl.id?pl.color:"#EDE8D8"}`,background:userPlan===pl.id?pl.color+"11":"#FFF",marginBottom:8,cursor:"pointer",transition:"all .15s"}}>
+            ].map(pl=><div key={pl.id} onClick={()=>{if(pl.id!=="free"){}}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${userPlan===pl.id?pl.color:"#EDE8D8"}`,background:userPlan===pl.id?pl.color+"11":"#FFF",marginBottom:8,cursor:"pointer",transition:"all .15s"}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:13,fontWeight:800,color:pl.color}}>{pl.name}</span>
