@@ -1,4 +1,5 @@
-import { useState, useRef, createContext, useContext } from "react";
+import { useState, useRef, createContext, useContext, useEffect } from "react";
+import { supabase } from "./supabase";
 
 // ── Language System ──────────────────────────────────────────────────
 const LangContext = createContext("th");
@@ -136,26 +137,45 @@ function Login({onLogin}) {
   const lang=useLang();
   const [mode,setMode]=useState("login");const [name,setName]=useState("");const [email,setEmail]=useState("");
   const [pass,setPass]=useState("");const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
-  const [gLoad,setGLoad]=useState(false);const [gStep,setGStep]=useState("");
-  const handleGoogle=()=>{setGLoad(true);setErr("");setGStep("picking");setTimeout(()=>{setGStep("auth");setTimeout(()=>{setGLoad(false);onLogin("นักพัฒนา ฟรีแลนซ์");},700);},1400);};
-  const submit=()=>{setErr("");if(mode==="register"&&!name.trim()){setErr(lang==="th"?"กรุณาใส่ชื่อ":"Please enter your name");return;}if(!email.includes("@")){setErr(lang==="th"?"อีเมลไม่ถูกต้อง":"Invalid email");return;}if(pass.length<6){setErr(lang==="th"?"รหัสผ่านต้องมีอย่างน้อย 6 ตัว":"Password must be at least 6 characters");return;}setLoading(true);setTimeout(()=>{setLoading(false);onLogin(name||email.split("@")[0]);},900);};
+
+  const submit=async()=>{
+    setErr("");
+    if(mode==="register"&&!name.trim()){setErr(lang==="th"?"กรุณาใส่ชื่อ":"Please enter your name");return;}
+    if(!email.includes("@")){setErr(lang==="th"?"อีเมลไม่ถูกต้อง":"Invalid email");return;}
+    if(pass.length<6){setErr(lang==="th"?"รหัสผ่านต้องมีอย่างน้อย 6 ตัว":"Password must be at least 6 characters");return;}
+    setLoading(true);
+    if(mode==="register"){
+      const {data,error}=await supabase.auth.signUp({email,password:pass,options:{data:{name}}});
+      if(error){setErr(error.message);setLoading(false);return;}
+      if(data.user){
+        await supabase.from("profiles").upsert({id:data.user.id,name:name||email.split("@")[0]});
+        onLogin(name||email.split("@")[0]);
+      }
+    } else {
+      const {data,error}=await supabase.auth.signInWithPassword({email,password:pass});
+      if(error){setErr(lang==="th"?"อีเมลหรือรหัสผ่านไม่ถูกต้อง":"Invalid email or password");setLoading(false);return;}
+      if(data.user){
+        const {data:profile}=await supabase.from("profiles").select("name").eq("id",data.user.id).single();
+        onLogin(profile?.name||email.split("@")[0]);
+      }
+    }
+    setLoading(false);
+  };
+
   return <div className="lw">
     <div className="ldeco"><div className="ldc c1"/><div className="ldc c2"/><div className="ldc c3"/></div>
     <div className="lbrand"><div className="licon">🧾</div><div className="ltitle">{t("appName",lang)}</div><div className="lsub">{t("appSub",lang)}</div></div>
     <div className="lcard">
-      <button className={`gbtn ${gLoad?"gbtn-load":""}`} onClick={handleGoogle} disabled={gLoad||loading}>
-        {gLoad?(<><span className="gspin"/><span>{gStep==="picking"?(lang==="th"?"กำลังเลือกบัญชี...":"Selecting account..."):(lang==="th"?"กำลังเข้าสู่ระบบ...":"Signing in...")}</span></>):(<><GIcon/><span>{mode==="login"?t("signInGoogle",lang):t("registerGoogle",lang)}</span></>)}
-      </button>
-      <div className="lor"><div className="lorline"/><span className="lortext">{t("orEmail",lang)}</span><div className="lorline"/></div>
+      <div className="lor"><div className="lorline"/><span className="lortext">{lang==="th"?"เข้าสู่ระบบด้วยอีเมล":"Sign in with email"}</span><div className="lorline"/></div>
       <div className="ltabs"><button className={`ltb ${mode==="login"?"ltb-on":""}`} onClick={()=>{setMode("login");setErr("");}}>{t("signIn",lang)}</button><button className={`ltb ${mode==="register"?"ltb-on":""}`} onClick={()=>{setMode("register");setErr("");}}>{t("register",lang)}</button></div>
       {mode==="register"&&<><label className="ll">{t("yourName",lang)}</label><input className="li" placeholder={lang==="th"?"เช่น สมชาย ใจดี":"e.g. John Smith"} value={name} onChange={e=>setName(e.target.value)}/></>}
       <label className="ll">{t("email",lang)}</label><input className="li" type="email" placeholder="example@email.com" value={email} onChange={e=>setEmail(e.target.value)}/>
       <label className="ll">{t("password",lang)}</label><input className="li" type="password" placeholder={mode==="register"?(lang==="th"?"อย่างน้อย 6 ตัวอักษร":"At least 6 characters"):"••••••••"} value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
       {err&&<div className="lerr">⚠️ {err}</div>}
-      <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading||gLoad}>{loading?<span className="gspin"/>:mode==="login"?t("signIn",lang):t("register",lang)}</button>
+      <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading}>{loading?<span className="gspin"/>:mode==="login"?t("signIn",lang):t("register",lang)}</button>
       {mode==="login"&&<div className="lforgot">{t("forgotPass",lang)}</div>}
     </div>
-    <button className="guest-btn" onClick={()=>onLogin(lang==="th"?"ผู้ทดลองใช้":"Guest")} disabled={loading||gLoad}>
+    <button className="guest-btn" onClick={()=>onLogin(lang==="th"?"ผู้ทดลองใช้":"Guest")}>
       <span className="guest-icon">👀</span>
       <div className="guest-txt"><div className="guest-lbl">{t("guestLabel",lang)}</div><div className="guest-sub">{t("guestSub",lang)}</div></div>
       <span className="guest-arr">→</span>
@@ -888,9 +908,55 @@ function SummaryTab({data,goals,savings}) {
 
 // ── Root App ─────────────────────────────────────────────────────────
 export default function App() {
-  const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [tab,setTab]=useState("learn");
+  const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [userId,setUserId]=useState(null);const [tab,setTab]=useState("learn");
   const [data,setData]=useState(initData());const [goals,setGoals]=useState([]);const [savings,setSavings]=useState({});
   const [lang,setLang]=useState("th");
+
+  // Auto-restore session
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      if(session){
+        supabase.from("profiles").select("name").eq("id",session.user.id).single().then(({data:p})=>{
+          setUser(p?.name||session.user.email.split("@")[0]);
+          setUserId(session.user.id);
+          setScreen("app");
+          loadUserData(session.user.id);
+        });
+      } else {
+        setScreen("onboard");
+      }
+    });
+  },[]);
+
+  const loadUserData = async(uid)=>{
+    // Load monthly income
+    const {data:mdata}=await supabase.from("monthly_data").select("*").eq("user_id",uid);
+    const {data:exps}=await supabase.from("expenses").select("*").eq("user_id",uid);
+    const {data:gdata}=await supabase.from("goals").select("*").eq("user_id",uid);
+    if(mdata){
+      const newData=initData();
+      mdata.forEach(m=>{const idx=m.month;if(newData[idx])newData[idx].income=m.income;});
+      if(exps)exps.forEach(e=>{const idx=e.month;if(newData[idx])newData[idx].expenses.push({id:e.id,name:e.name,amount:e.amount,cat:e.cat});});
+      setData(newData);
+    }
+    if(gdata)setGoals(gdata.map(g=>({...g,saved:g.saved||0,deposits:[]})));
+  };
+
+  const saveIncome = async(monthIdx, income)=>{
+    if(!userId)return;
+    await supabase.from("monthly_data").upsert({user_id:userId,month:monthIdx,year:new Date().getFullYear(),income},{onConflict:"user_id,month,year"});
+  };
+
+  const saveExpense = async(monthIdx, exp)=>{
+    if(!userId)return;
+    await supabase.from("expenses").insert({user_id:userId,month:monthIdx,year:new Date().getFullYear(),name:exp.name,amount:exp.amount,cat:exp.cat});
+  };
+
+  const saveGoalToDB = async(goal)=>{
+    if(!userId)return;
+    await supabase.from("goals").upsert({...goal,user_id:userId},{onConflict:"id"});
+  };
+
   const TABS=[
     {key:"learn",  icon:"💡",label:lang==="th"?"เรียนรู้":"Learn"},
     {key:"money",  icon:"💰",label:lang==="th"?"การเงิน":"Money"},
@@ -899,8 +965,9 @@ export default function App() {
     {key:"summary",icon:"📊",label:lang==="th"?"สรุปปี":"Summary"},
   ];
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
+  const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setScreen("login");};
   if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
-  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Login onLogin={u=>{setUser(u);setScreen("app");}}/></Shell></LangContext.Provider>;
+  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Login onLogin={(u,uid)=>{setUser(u);setUserId(uid);setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
   return <LangContext.Provider value={lang}><div className="app">
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
@@ -1296,7 +1363,7 @@ export default function App() {
     <div className="hdr">
       <div className="hdr-top">
         <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">{lang==="th"?"ภาษีฟรีแลนซ์":"Freelance Tax"}</div>{user&&<div className="hdr-user">{lang==="th"?"สวัสดี":"Hello"}, {user} 👋</div>}</div></div>
-        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,marginRight:4}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button><button className="hdr-out" onClick={()=>setScreen("login")}>↩</button></div>
+        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,marginRight:4}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button><button className="hdr-out" onClick={handleLogout}>↩</button></div>
       </div>
       <div className="hdr-tabs">{TABS.map(t=><button key={t.key} className={`htab ${tab===t.key?"on":""}`} onClick={()=>setTab(t.key)}><span className="htab-icon">{t.icon}</span><span>{t.label}</span></button>)}</div>
     </div>
