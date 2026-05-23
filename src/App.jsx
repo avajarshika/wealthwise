@@ -562,7 +562,7 @@ function GoalDetailSheet({goal, onDeposit, onDeleteDeposit, onClose}) {
 
 
 // ── Retirement Planner ───────────────────────────────────────────────
-function RetirementPlanner({onClose}) {
+function RetirementPlanner({onClose, userId}) {
   const [age,    setAge]    = useState("30");
   const [retAge, setRetAge] = useState("55");
   const [lifeAge,setLifeAge]= useState("85");
@@ -799,6 +799,12 @@ function RetirementPlanner({onClose}) {
           </div>
 
           <div className="rp-note">* การคำนวณเป็นการประมาณการ ควรปรึกษาที่ปรึกษาการเงินสำหรับการวางแผนจริง</div>
+          <button className="rp-calc-btn" style={{background:"#4A7C3F",marginTop:8}} onClick={async()=>{
+            if(userId){
+              await supabase.from("retirement_plans").upsert({user_id:userId,age:parseInt(age),ret_age:parseInt(retAge),life_age:parseInt(lifeAge),expense:parseFloat(expense),current_savings:parseFloat(currentSavings||0),inflation:parseFloat(inflation),return_rate:parseFloat(returnRate),monthly_save:Math.round(result.monthlySave),total_needed:Math.round(result.totalNeeded),updated_at:new Date().toISOString()},{onConflict:"user_id"});
+            }
+            alert("✅ บันทึกแผนเกษียณแล้ว!");
+          }}>💾 บันทึกแผนเกษียณ</button>
         </>)}
 
         <button className="sbtn-c" style={{width:"100%",marginTop:12}} onClick={onClose}>ปิด</button>
@@ -808,7 +814,7 @@ function RetirementPlanner({onClose}) {
 }
 
 // ── Goals Tab ────────────────────────────────────────────────────────
-function GoalsTab({data,goals,setGoals,savings}) {
+function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
   const [showAdd,setShowAdd]=useState(false);const [editGoal,setEditGoal]=useState(null);const [detailGoal,setDetailGoal]=useState(null);const [showRetirement,setShowRetirement]=useState(false);
   const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {tax}=calcPersonalTax(totalInc);const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
@@ -872,7 +878,7 @@ function GoalsTab({data,goals,setGoals,savings}) {
     </div>;})}
     </div>}
     {(showAdd||editGoal)&&<GoalSheet existing={editGoal} onSave={saveGoal} onClose={()=>{setShowAdd(false);setEditGoal(null);}}/>}
-    {showRetirement&&<RetirementPlanner onClose={()=>setShowRetirement(false)}/>}
+    {showRetirement&&<RetirementPlanner onClose={()=>setShowRetirement(false)} userId={userId}/>}
     {detailGoal&&<GoalDetailSheet goal={detailGoal} onDeposit={(gid,dep)=>{doDeposit(gid,dep);setDetailGoal(prev=>({...prev,saved:prev.saved+dep.amount,deposits:[...(prev.deposits||[]),dep]}));}} onDeleteDeposit={(gid,did)=>{doDeleteDeposit(gid,did);setDetailGoal(prev=>{const d=prev.deposits?.find(x=>x.id===did);return {...prev,saved:Math.max(0,prev.saved-(d?.amount||0)),deposits:(prev.deposits||[]).filter(x=>x.id!==did)};});}} onClose={()=>setDetailGoal(null)}/>}
   </div>;
 }
@@ -963,6 +969,7 @@ export default function App() {
     {key:"plan",   icon:"🌱",label:lang==="th"?"วางแผน":"Plan"},
     {key:"goals",  icon:"🌟",label:lang==="th"?"ความฝัน":"Goals"},
     {key:"summary",icon:"📊",label:lang==="th"?"สรุปปี":"Summary"},
+    {key:"pricing",icon:"💎",label:lang==="th"?"แพ็กเกจ":"Plans"},
     {key:"profile",icon:"👤",label:lang==="th"?"โปรไฟล์":"Profile"},
   ];
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
@@ -984,14 +991,14 @@ export default function App() {
       .hdr-right{display:flex;align-items:center;gap:8px;}
       .hdr-year{font-size:10px;color:#A89660;font-weight:600;}
       .hdr-out{background:#F5EFE0;border:1.5px solid #EDE8D8;color:#A89660;width:26px;height:26px;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(6,1fr);z-index:40;padding-bottom:env(safe-area-inset-bottom);}
-      .bnav-btn{padding:8px 0 10px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;color:#C4B88A;transition:color .2s;}
+      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(7,1fr);z-index:40;padding-bottom:env(safe-area-inset-bottom);}
+      .bnav-btn{padding:8px 0 10px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:1px;color:#C4B88A;transition:color .2s;}
       .bnav-btn.on{color:#2C2510;}
-      .bnav-icon{font-size:17px;}
-      .bnav-lbl{font-size:9px;font-weight:700;}
-      .bnav-pip{width:14px;height:3px;border-radius:2px;background:#E8B84B;opacity:0;margin-top:1px;transition:opacity .2s;}
+      .bnav-icon{font-size:15px;}
+      .bnav-lbl{font-size:8px;font-weight:700;}
+      .bnav-pip{width:12px;height:3px;border-radius:2px;background:#E8B84B;opacity:0;margin-top:1px;transition:opacity .2s;}
       .bnav-btn.on .bnav-pip{opacity:1;}
-      .tab-content{padding:14px 16px 8px;max-width:430px;margin:0 auto;width:100%;}
+      .tab-content{padding:16px 16px 16px;max-width:430px;margin:0 auto;width:100%;box-sizing:border-box;}
       /* Learn */
       .learn-hero{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:20px;margin-bottom:14px;color:#FFF3C4;}
       .lh-badge{display:inline-block;background:#E8B84B33;color:#E8B84B;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
@@ -1369,10 +1376,73 @@ export default function App() {
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings}/>}
+    {tab==="pricing"&&<PricingTab lang={lang}/>}
     {tab==="profile"&&<ProfileTab user={user} email={userId} onLogout={handleLogout} lang={lang}/>}
     </div>
     <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
   </div></LangContext.Provider>;
+}
+
+// ── Pricing Tab ──────────────────────────────────────────────────────
+function PricingTab({lang}) {
+  const [sel,setSel]=useState("pro");
+  const plans=[
+    {id:"free",name:"Free",price:0,color:"#A89660",bg:"#FFFDF5",features:[
+      {ok:true,text:lang==="th"?"บันทึกรายรับ-จ่าย 3 เดือน":"Record income/expenses 3 months"},
+      {ok:true,text:lang==="th"?"คำนวณภาษีพื้นฐาน":"Basic tax calculation"},
+      {ok:true,text:lang==="th"?"วางแผนเกษียณเบื้องต้น":"Basic retirement planning"},
+      {ok:false,text:lang==="th"?"อัปโหลดใบเสร็จ":"Upload receipts"},
+      {ok:false,text:lang==="th"?"Export รายงาน PDF":"Export PDF report"},
+      {ok:false,text:lang==="th"?"SSF/RMF Calculator":"SSF/RMF Calculator"},
+      {ok:false,text:lang==="th"?"AI วิเคราะห์การเงิน":"AI financial analysis"},
+    ]},
+    {id:"pro",name:"Pro",price:99,color:"#E8B84B",bg:"#FFF8DC",badge:lang==="th"?"ยอดนิยม 🔥":"Most Popular 🔥",features:[
+      {ok:true,text:lang==="th"?"บันทึกรายรับ-จ่ายไม่จำกัด":"Unlimited income/expense records"},
+      {ok:true,text:lang==="th"?"คำนวณภาษีครบถ้วน":"Full tax calculation"},
+      {ok:true,text:lang==="th"?"วางแผนเกษียณ + บันทึกผล":"Retirement planning + save results"},
+      {ok:true,text:lang==="th"?"อัปโหลดใบเสร็จ 50 ไฟล์/ปี":"Upload 50 receipts/year"},
+      {ok:true,text:lang==="th"?"Export รายงาน PDF":"Export PDF report"},
+      {ok:true,text:lang==="th"?"SSF/RMF Calculator":"SSF/RMF Calculator"},
+      {ok:false,text:lang==="th"?"AI วิเคราะห์การเงิน":"AI financial analysis"},
+    ]},
+    {id:"proplus",name:"Pro+",price:199,color:"#7A4FA0",bg:"#F5F0FF",badge:lang==="th"?"ครบสุด ✨":"Full Features ✨",features:[
+      {ok:true,text:lang==="th"?"ทุกอย่างใน Pro":"Everything in Pro"},
+      {ok:true,text:lang==="th"?"อัปโหลดใบเสร็จไม่จำกัด":"Unlimited receipt uploads"},
+      {ok:true,text:lang==="th"?"AI วิเคราะห์การเงิน":"AI financial analysis"},
+      {ok:true,text:lang==="th"?"เตือนภาษีอัตโนมัติ":"Automatic tax reminders"},
+      {ok:true,text:lang==="th"?"วางแผน SSF/RMF ประหยัดภาษีสูงสุด":"SSF/RMF tax optimization"},
+      {ok:true,text:lang==="th"?"รายงานสรุปปีสำหรับนักบัญชี":"Year-end accountant report"},
+      {ok:true,text:lang==="th"?"Priority Support":"Priority Support"},
+    ]},
+  ];
+  const p=plans.find(x=>x.id===sel);
+  return <div className="tab-content">
+    <div style={{textAlign:"center",marginBottom:20}}>
+      <div style={{fontSize:28,marginBottom:6}}>💎</div>
+      <div style={{fontSize:20,fontWeight:800,color:"#2C2510",marginBottom:4}}>{lang==="th"?"เลือกแพ็กเกจที่ใช่":"Choose Your Plan"}</div>
+      <div style={{fontSize:12,color:"#A89660"}}>{lang==="th"?"ยกเลิกได้ทุกเมื่อ ไม่ผูกมัด":"Cancel anytime, no commitment"}</div>
+    </div>
+    <div style={{display:"flex",gap:8,marginBottom:16}}>
+      {plans.map(pl=><button key={pl.id} onClick={()=>setSel(pl.id)} style={{flex:1,padding:"10px 4px",borderRadius:12,border:`2px solid ${sel===pl.id?pl.color:"#EDE8D8"}`,background:sel===pl.id?pl.bg:"#FFF",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",transition:"all .2s"}}>
+        <div style={{fontSize:13,fontWeight:800,color:sel===pl.id?pl.color:"#A89660"}}>{pl.name}</div>
+        <div style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>{pl.price===0?"ฟรี":`${pl.price}฿`}</div>
+        {pl.price>0&&<div style={{fontSize:9,color:"#A89660"}}>/เดือน</div>}
+      </button>)}
+    </div>
+    <div style={{background:p.bg,border:`2px solid ${p.color}44`,borderRadius:18,padding:20,marginBottom:16}}>
+      {p.badge&&<div style={{display:"inline-block",background:p.color,color:"#FFF",fontSize:11,fontWeight:800,padding:"3px 12px",borderRadius:20,marginBottom:12}}>{p.badge}</div>}
+      <div style={{fontSize:22,fontWeight:800,color:p.color,marginBottom:4}}>{p.name}</div>
+      <div style={{fontSize:32,fontWeight:800,color:"#2C2510",marginBottom:16}}>{p.price===0?"ฟรี":`฿${p.price}`}{p.price>0&&<span style={{fontSize:13,color:"#A89660",fontWeight:400}}>/เดือน</span>}</div>
+      {p.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <span style={{fontSize:16,flexShrink:0}}>{f.ok?"✅":"❌"}</span>
+        <span style={{fontSize:13,color:f.ok?"#2C2510":"#C4B88A",fontWeight:f.ok?600:400}}>{f.text}</span>
+      </div>)}
+    </div>
+    <button style={{width:"100%",background:p.price===0?"#F5EFE0":p.color,color:p.price===0?"#A89660":"#FFF",border:"none",borderRadius:14,padding:16,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>
+      {p.price===0?(lang==="th"?"ใช้งานฟรี (ปัจจุบัน)":"Using Free (Current)"):(lang==="th"?"อัปเกรดเลย →":"Upgrade Now →")}
+    </button>
+    <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#C4B88A"}}>🔒 {lang==="th"?"ชำระเงินปลอดภัย · ยกเลิกได้ทุกเมื่อ":"Secure payment · Cancel anytime"}</div>
+  </div>;
 }
 
 // ── Profile Tab ──────────────────────────────────────────────────────
