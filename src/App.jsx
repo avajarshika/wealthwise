@@ -297,6 +297,7 @@ function AddSheet({title,onSave,onClose,hasCategory}) {
 
 function MoneyTab({data,setData}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
+  const [docs,setDocs]=useState(Array.from({length:12},()=>[]));const docRef=useRef();
   const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
   const annualInc=data.reduce((s,d)=>s+d.income,0);const {monthly:taxMo}=calcPersonalTax(annualInc);
   const addIncome=({amount})=>setData(d=>d.map((r,i)=>i===sel?{...r,income:amount}:r));
@@ -321,6 +322,20 @@ function MoneyTab({data,setData}) {
     <div className="sec-hd"><span>📤 ค่าใช้จ่าย</span><button className="sec-add" onClick={()=>setSheet("expense")}>+ เพิ่ม</button></div>
     {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
     {m.income>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
+    {/* ── เอกสารรายได้ ── */}
+    <div className="sec-hd" style={{marginTop:4}}><span>📎 เอกสารรายได้เดือนนี้</span><button className="sec-add" onClick={()=>{if(userPlan==="free"){onPaywall("อัปโหลดเอกสาร");}else{docRef.current.click();}}}>+ แนบไฟล์</button></div>
+    {docs[sel].length===0
+      ?<div className="empty-card" onClick={()=>{if(userPlan==="free"){onPaywall("อัปโหลดเอกสาร");}else{docRef.current.click();}}}>แตะเพื่อแนบสลิป ใบแจ้งหนี้ หรือเอกสาร →</div>
+      :<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:10}}>
+        {docs[sel].map(d=><div key={d.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:11,padding:"10px 13px",display:"flex",alignItems:"center",gap:9}}>
+          <span style={{fontSize:20,flexShrink:0}}>{d.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)?"🖼️":d.name.match(/\.pdf$/i)?"📄":"📎"}</span>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:"#2C2510",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</div><div style={{fontSize:10,color:"#A89660",marginTop:1}}>{d.size} · {d.date}</div></div>
+          <a href={d.dataUrl} download={d.name}><button style={{background:"#FFF3C4",border:"none",color:"#B8860B",fontSize:11,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>⬇</button></a>
+          <button className="del-btn" onClick={()=>setDocs(prev=>prev.map((arr,i)=>i===sel?arr.filter(x=>x.id!==d.id):arr))}>🗑</button>
+        </div>)}
+      </div>
+    }
+    <input ref={docRef} type="file" accept="image/*,application/pdf,*/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{const doc={id:Date.now(),name:file.name,dataUrl:ev.target.result,size:(file.size/1024).toFixed(1)+" KB",date:new Date().toLocaleDateString("th-TH")};setDocs(prev=>prev.map((arr,i)=>i===sel?[...arr,doc]:arr));};reader.readAsDataURL(file);e.target.value="";}}/>
     {sheet&&<AddSheet title={sheet==="income"?"บันทึกรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
   </div>;
 }
@@ -571,6 +586,25 @@ function RetirementPlanner({onClose, userId}) {
   const [returnRate,setReturn]  = useState("6");
   const [currentSavings,setCurSav]=useState("0");
   const [result, setResult] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load saved plan from Supabase on open
+  useEffect(()=>{
+    if(!userId||loaded) return;
+    supabase.from("retirement_plans").select("*").eq("user_id",userId).single().then(({data:rp})=>{
+      if(rp){
+        setAge(String(rp.age||30));setRetAge(String(rp.ret_age||55));setLifeAge(String(rp.life_age||85));
+        setExpense(String(rp.expense||""));setCurSav(String(rp.current_savings||0));
+        setInflation(String(rp.inflation||3));setReturn(String(rp.return_rate||6));
+      }
+      setLoaded(true);
+    });
+  },[userId]);
+
+  // Auto-calc when any input changes
+  useEffect(()=>{ if(loaded&&expense) calcSilent(); },[age,retAge,lifeAge,expense,inflation,returnRate,currentSavings,loaded]);
+
+  const calcSilent = () => { calc(); };
 
   const calc = () => {
     const a   = parseInt(age)||30;
@@ -718,7 +752,7 @@ function RetirementPlanner({onClose, userId}) {
           </div>
         </div>
 
-        <button className="rp-calc-btn" onClick={calc}>คำนวณ →</button>
+        <button className="rp-calc-btn" onClick={calc}>{result?"คำนวณใหม่ →":"คำนวณ →"}</button>
 
         {result && (<>
           {/* Key results */}
@@ -884,7 +918,7 @@ function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
 }
 
 // ── Summary Tab ──────────────────────────────────────────────────────
-function SummaryTab({data,goals,savings}) {
+function SummaryTab({data,goals,savings,userPlan,onPaywall}) {
   const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {taxable,tax}=calcPersonalTax(totalInc);const net=totalInc-totalExp-tax;
   const maxInc=Math.max(...data.map(d=>d.income),1);
@@ -909,6 +943,42 @@ function SummaryTab({data,goals,savings}) {
     {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
     {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
     <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
+    <button onClick={()=>{if(userPlan==="free"){onPaywall&&onPaywall("Export รายงาน PDF");}else{alert("📄 กำลังพัฒนาฟีเจอร์ Export PDF");}}} style={{width:"100%",background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>📄</span><div style={{textAlign:"left"}}><div style={{fontSize:14,fontWeight:800,color:"#2C2510"}}>Export รายงานปี {YEAR_TH}</div><div style={{fontSize:11,color:"#A89660",marginTop:2}}>{userPlan==="free"?"🔒 ต้องการแพ็กเกจ Pro":"สร้าง PDF สรุปรายปี"}</div></div></div>
+      <span style={{fontSize:18,color:userPlan==="free"?"#C4B88A":"#E8B84B"}}>→</span>
+    </button>
+  </div>;
+}
+
+
+// ── Paywall Popup ─────────────────────────────────────────────────────
+function PaywallPopup({feature, onClose, onUpgrade}) {
+  return <div style={{position:"fixed",inset:0,background:"rgba(44,37,16,.6)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div style={{background:"#FFFDF5",borderRadius:"24px 24px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:430,boxShadow:"0 -8px 40px rgba(44,37,16,.2)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{width:40,height:4,background:"#EDE8D8",borderRadius:2,margin:"0 auto 20px"}}/>
+      <div style={{textAlign:"center",marginBottom:20}}>
+        <div style={{fontSize:40,marginBottom:10}}>🔒</div>
+        <div style={{fontSize:18,fontWeight:800,color:"#2C2510",marginBottom:6}}>ฟีเจอร์ Pro</div>
+        <div style={{fontSize:13,color:"#A89660",lineHeight:1.6}}>"{feature}" ต้องการแพ็กเกจ Pro<br/>อัปเกรดเพื่อใช้งานได้ทันที</div>
+      </div>
+      {/* Plan options */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        {[
+          {name:"Pro",price:"99฿",period:"/เดือน",color:"#E8B84B",popular:true},
+          {name:"Pro+",price:"199฿",period:"/เดือน",color:"#7A4FA0"},
+        ].map(pl=><div key={pl.name} style={{flex:1,background:pl.color+"11",border:`1.5px solid ${pl.color}44`,borderRadius:14,padding:"12px 10px",textAlign:"center",cursor:"pointer",position:"relative"}} onClick={()=>{alert("🔒 ระบบชำระเงินกำลังพัฒนา
+เปิดให้ใช้เร็วๆ นี้!");onClose();}}>
+          {pl.popular&&<div style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",background:"#E8B84B",color:"#2C2510",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:10,whiteSpace:"nowrap"}}>ยอดนิยม</div>}
+          <div style={{fontSize:15,fontWeight:800,color:pl.color,marginBottom:2}}>{pl.name}</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#2C2510"}}>{pl.price}<span style={{fontSize:11,color:"#A89660",fontWeight:400}}>{pl.period}</span></div>
+        </div>)}
+      </div>
+      <button style={{width:"100%",background:"#E8B84B",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:800,color:"#2C2510",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:10}} onClick={()=>{alert("🔒 ระบบชำระเงินกำลังพัฒนา
+เปิดให้ใช้เร็วๆ นี้!");onClose();}}>
+        อัปเกรดเลย →
+      </button>
+      <button style={{width:"100%",background:"none",border:"none",color:"#A89660",fontSize:13,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}} onClick={onClose}>ยังไม่ตอนนี้</button>
+    </div>
   </div>;
 }
 
@@ -916,7 +986,7 @@ function SummaryTab({data,goals,savings}) {
 export default function App() {
   const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [userId,setUserId]=useState(null);const [tab,setTab]=useState("learn");
   const [data,setData]=useState(initData());const [goals,setGoals]=useState([]);const [savings,setSavings]=useState({});
-  const [lang,setLang]=useState("th");
+  const lang="th";
 
   // Auto-restore session
   useEffect(()=>{
@@ -964,24 +1034,25 @@ export default function App() {
   };
 
   const TABS=[
-    {key:"learn",  icon:"💡",label:lang==="th"?"เรียนรู้":"Learn"},
-    {key:"money",  icon:"💰",label:lang==="th"?"การเงิน":"Money"},
-    {key:"plan",   icon:"🌱",label:lang==="th"?"วางแผน":"Plan"},
-    {key:"goals",  icon:"🌟",label:lang==="th"?"ความฝัน":"Goals"},
-    {key:"summary",icon:"📊",label:lang==="th"?"สรุปปี":"Summary"},
-    {key:"pricing",icon:"💎",label:lang==="th"?"แพ็กเกจ":"Plans"},
-    {key:"profile",icon:"👤",label:lang==="th"?"โปรไฟล์":"Profile"},
+    {key:"learn",  icon:"💡", label:"เรียนรู้"},
+    {key:"money",  icon:"💰", label:"การเงิน"},
+    {key:"plan",   icon:"🌱", label:"วางแผน"},
+    {key:"goals",  icon:"🌟", label:"ความฝัน"},
+    {key:"summary",icon:"📊", label:"สรุปปี"},
   ];
+  const [drawerOpen,setDrawerOpen]=useState(false);
+  const [paywallFeature,setPaywallFeature]=useState(null);
+  const [userPlan,setUserPlan]=useState("free"); // free | pro | proplus
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
   const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setScreen("login");};
-  if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
-  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang} setLang={setLang}><Login onLogin={(u,uid)=>{setUser(u);setUserId(uid);setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
+  if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
+  if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang}><Login onLogin={(u,uid)=>{setUser(u);setUserId(uid);setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
   return <LangContext.Provider value={lang}><div className="app">
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0;}
       body,html{font-family:'Sarabun',sans-serif;background:#FFFDF5;}
-      .app{max-width:430px;margin:0 auto;min-height:100vh;background:#FFFDF5;display:flex;flex-direction:column;}
+      .app{max-width:430px;margin:0 auto;min-height:100vh;background:#FFFDF5;display:flex;flex-direction:column;width:100%;}
       .hdr{background:#FFFDF5;border-bottom:1.5px solid #EDE8D8;padding:10px 16px;position:sticky;top:0;z-index:30;}
       .hdr-top{display:flex;align-items:center;justify-content:space-between;}
       .hdr-brand{display:flex;align-items:center;gap:8px;}
@@ -991,14 +1062,16 @@ export default function App() {
       .hdr-right{display:flex;align-items:center;gap:8px;}
       .hdr-year{font-size:10px;color:#A89660;font-weight:600;}
       .hdr-out{background:#F5EFE0;border:1.5px solid #EDE8D8;color:#A89660;width:26px;height:26px;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(7,1fr);z-index:40;padding-bottom:env(safe-area-inset-bottom);}
+      .hdr-menu-btn{background:#2C2510;border:none;color:#FFF3C4;width:34px;height:34px;border-radius:10px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s;}
+      .hdr-menu-btn:active{opacity:.75;}
+      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(5,1fr);z-index:40;padding-bottom:env(safe-area-inset-bottom);}
       .bnav-btn{padding:8px 0 10px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:1px;color:#C4B88A;transition:color .2s;}
       .bnav-btn.on{color:#2C2510;}
       .bnav-icon{font-size:15px;}
       .bnav-lbl{font-size:8px;font-weight:700;}
       .bnav-pip{width:12px;height:3px;border-radius:2px;background:#E8B84B;opacity:0;margin-top:1px;transition:opacity .2s;}
       .bnav-btn.on .bnav-pip{opacity:1;}
-      .tab-content{padding:16px 16px 16px;max-width:430px;margin:0 auto;width:100%;box-sizing:border-box;}
+      .tab-content{padding:14px 16px 20px;width:100%;box-sizing:border-box;}
       /* Learn */
       .learn-hero{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:20px;margin-bottom:14px;color:#FFF3C4;}
       .lh-badge{display:inline-block;background:#E8B84B33;color:#E8B84B;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
@@ -1148,7 +1221,8 @@ export default function App() {
       .inv-tap-hint{font-size:11px;font-weight:700;}
       .invest-note{font-size:11px;color:#A89660;margin-bottom:14px;text-align:center;}
       /* InvestSheet */
-      ter;font-size:21px;flex-shrink:0;}
+      .inv-sheet-hd{display:flex;align-items:center;gap:11px;background:#FFFDF5;border-radius:12px;padding:11px 13px;margin-bottom:14px;}
+      .inv-sh-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;}
       .inv-sh-title{font-size:15px;font-weight:800;color:#2C2510;}
       .inv-sh-desc{font-size:11px;color:#A89660;margin-top:2px;}
       .ish-sec-label{font-size:10px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;display:block;}
@@ -1283,11 +1357,11 @@ export default function App() {
       .sec-hd2{font-size:10px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px;}
       .mo-bars{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
       .mob-row{display:flex;align-items:center;gap:8px;}
-      .mob-label{font-size:10px;font-weight:700;color:#A89660;width:26px;flex-shrink:0;}
+      .mob-label{font-size:10px;font-weight:700;color:#A89660;width:30px;flex-shrink:0;}
       .mob-track{flex:1;height:7px;background:#F5EFE0;border-radius:4px;overflow:hidden;position:relative;}
       .mob-inc{position:absolute;top:0;left:0;height:100%;background:#E8B84B;border-radius:4px;}
       .mob-exp{position:absolute;top:0;left:0;height:100%;background:#FF909044;border-radius:4px;}
-      .mob-val{font-size:10px;font-weight:700;color:#2C2510;width:50px;text-align:right;flex-shrink:0;}
+      .mob-val{font-size:10px;font-weight:700;color:#2C2510;width:56px;text-align:right;flex-shrink:0;}
       .cat-breakdown{display:flex;flex-direction:column;gap:7px;margin-bottom:12px;}
       .cb-row{background:#FFF;border:1.5px solid #EDE8D8;border-radius:10px;padding:10px;display:flex;align-items:center;gap:9px;}
       .cb-icon{font-size:18px;flex-shrink:0;}
@@ -1296,7 +1370,7 @@ export default function App() {
       .cb-bar-wrap{height:4px;background:#F5EFE0;border-radius:2px;overflow:hidden;}
       .cb-bar{height:100%;background:#E8B84B;border-radius:2px;}
       .cb-amt{font-size:11px;font-weight:700;color:#2C2510;white-space:nowrap;}
-      .sum-goal-row{display:flex;align-items:flex-start;gap:9px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:11px;margin-bottom:7px;}
+      .sum-goal-row{display:flex;align-items:flex-start;gap:9px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:11px;margin-bottom:7px;width:100%;box-sizing:border-box;}
       .efiling-cta{display:flex;align-items:center;justify-content:space-between;background:#E8B84B;border-radius:14px;padding:15px 18px;margin-bottom:14px;cursor:pointer;}
       /* RetirementPlanner */
       .rp-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
@@ -1364,20 +1438,90 @@ export default function App() {
       .ef-s{font-size:11px;color:#7A6020;margin-top:2px;}
       .ef-arr{font-size:20px;color:#2C2510;font-weight:700;}
     `}</style>
+    {/* ── Drawer ── */}
+    {drawerOpen&&<div style={{position:"fixed",inset:0,zIndex:100,display:"flex",justifyContent:"flex-end"}} onClick={()=>setDrawerOpen(false)}>
+      <div style={{width:280,background:"#FFFDF5",height:"100%",boxShadow:"-8px 0 32px rgba(44,37,16,.18)",overflowY:"auto",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+        {/* Drawer header */}
+        <div style={{background:"linear-gradient(135deg,#2C2510,#4A3E22)",padding:"44px 20px 24px",position:"relative"}}>
+          <button onClick={()=>setDrawerOpen(false)} style={{position:"absolute",top:12,right:12,background:"#ffffff22",border:"none",color:"#FFF3C4",width:30,height:30,borderRadius:"50%",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          <div style={{width:56,height:56,background:"#E8B84B",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,marginBottom:12}}>👤</div>
+          <div style={{fontSize:16,fontWeight:800,color:"#FFF3C4",marginBottom:3}}>{user||"ผู้ทดลองใช้"}</div>
+          <div style={{fontSize:11,color:"#A89660",marginBottom:10}}>WealthWise Member</div>
+          {/* Plan badge */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:userPlan==="free"?"#4A3E22":userPlan==="pro"?"#E8B84B":"#7A4FA0",borderRadius:20,padding:"4px 12px"}}>
+            <span style={{fontSize:11}}>{userPlan==="free"?"🎁":userPlan==="pro"?"⭐":"💎"}</span>
+            <span style={{fontSize:11,fontWeight:800,color:userPlan==="free"?"#A89660":"#FFF"}}>{userPlan==="free"?"FREE":userPlan==="pro"?"PRO":"PRO+"}</span>
+          </div>
+        </div>
+        {/* Menu items */}
+        <div style={{flex:1,padding:"8px 0"}}>
+          {[
+            {icon:"👤",label:"โปรไฟล์",sub:"ข้อมูลบัญชีของคุณ"},
+            {icon:"🔔",label:"การแจ้งเตือน",sub:"จัดการการแจ้งเตือน"},
+            {icon:"🔒",label:"ความเป็นส่วนตัว",sub:"ข้อมูลของคุณปลอดภัย"},
+            {icon:"❓",label:"ช่วยเหลือ",sub:"คำถามที่พบบ่อย"},
+          ].map(item=><div key={item.label} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 20px",borderBottom:"1px solid #F5EFE0",cursor:"pointer"}} onClick={()=>setDrawerOpen(false)}>
+            <span style={{fontSize:20,width:28,textAlign:"center"}}>{item.icon}</span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{item.label}</div><div style={{fontSize:11,color:"#A89660",marginTop:1}}>{item.sub}</div></div>
+            <span style={{color:"#C4B88A",fontSize:14}}>›</span>
+          </div>)}
+          {/* Plan section */}
+          <div style={{padding:"16px 20px 8px"}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#A89660",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:10}}>แพ็กเกจ</div>
+            {[
+              {id:"free",name:"Free",price:"ฟรี",color:"#A89660",desc:"ฟีเจอร์พื้นฐาน"},
+              {id:"pro",name:"Pro",price:"99฿/เดือน",color:"#E8B84B",desc:"ครบสำหรับฟรีแลนซ์",popular:true},
+              {id:"proplus",name:"Pro+",price:"199฿/เดือน",color:"#7A4FA0",desc:"AI + ครบทุกฟีเจอร์"},
+            ].map(pl=><div key={pl.id} onClick={()=>{if(pl.id!=="free"){alert("🔒 ระบบชำระเงินกำลังพัฒนา
+เปิดให้ใช้เร็วๆ นี้!")}}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${userPlan===pl.id?pl.color:"#EDE8D8"}`,background:userPlan===pl.id?pl.color+"11":"#FFF",marginBottom:8,cursor:"pointer",transition:"all .15s"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:13,fontWeight:800,color:pl.color}}>{pl.name}</span>
+                  {pl.popular&&<span style={{fontSize:9,background:"#E8B84B",color:"#2C2510",padding:"1px 6px",borderRadius:10,fontWeight:800}}>ยอดนิยม</span>}
+                </div>
+                <div style={{fontSize:11,color:"#A89660",marginTop:1}}>{pl.desc}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:12,fontWeight:800,color:"#2C2510"}}>{pl.price}</div>
+                {userPlan===pl.id&&<div style={{fontSize:9,color:pl.color,fontWeight:700}}>ปัจจุบัน</div>}
+              </div>
+            </div>)}
+          </div>
+        </div>
+        {/* Logout */}
+        <div style={{padding:"12px 20px 32px"}}>
+          <button onClick={()=>{setDrawerOpen(false);handleLogout();}} style={{width:"100%",background:"#FFF0F0",border:"1.5px solid #F0AAAA",borderRadius:12,padding:13,fontSize:13,fontWeight:800,color:"#C04848",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            ↩ ออกจากระบบ
+          </button>
+          <div style={{textAlign:"center",marginTop:10,fontSize:10,color:"#C4B88A"}}>WealthWise v1.0 · ข้อมูลของคุณปลอดภัย 🔒</div>
+        </div>
+      </div>
+    </div>}
+
+    {paywallFeature&&<PaywallPopup feature={paywallFeature} onClose={()=>setPaywallFeature(null)} onUpgrade={()=>setPaywallFeature(null)}/>}
+    {/* ── Header ── */}
     <div className="hdr">
       <div className="hdr-top">
-        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">{lang==="th"?"WealthWise":"WealthWise"}</div>{user&&<div className="hdr-user">{lang==="th"?"สวัสดี":"Hello"}, {user} 👋</div>}</div></div>
-        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button></div>
+        <div className="hdr-brand">
+          <div className="hdr-icon">🧾</div>
+          <div>
+            <div className="hdr-name">WealthWise</div>
+            {user&&<div className="hdr-user">สวัสดี, {user} 👋</div>}
+          </div>
+        </div>
+        <div className="hdr-right">
+          <div className="hdr-year">ปี {YEAR_TH}</div>
+          <button className="hdr-menu-btn" onClick={()=>setDrawerOpen(true)}>☰</button>
+        </div>
       </div>
     </div>
-    <div style={{paddingBottom:80}}>
+    <div style={{paddingBottom:84,width:"100%"}}>
     {tab==="learn"  &&<LearnTab/>}
-    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveExpense={saveExpense}/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature}/>}
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
-    {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings}/>}
-    {tab==="pricing"&&<PricingTab lang={lang}/>}
-    {tab==="profile"&&<ProfileTab user={user} email={userId} onLogout={handleLogout} lang={lang}/>}
+    {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature}/>}
+
     </div>
     <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
   </div></LangContext.Provider>;
@@ -1487,11 +1631,9 @@ function ProfileTab({user, onLogout, lang}) {
 }
 
 // ── Shell (pre-login wrapper) ────────────────────────────────────────
-function Shell({children, lang, setLang}) {
+function Shell({children, lang}) {
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden",position:"relative"}}>
-    <button onClick={()=>setLang(l=>l==="th"?"en":"th")} style={{position:"fixed",top:12,right:12,zIndex:9999,background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:8,padding:"5px 11px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,boxShadow:"0 2px 8px rgba(44,37,16,.25)"}}>
-      {lang==="th"?"EN":"TH"}
-    </button>
+
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0;}
