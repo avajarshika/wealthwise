@@ -963,6 +963,7 @@ export default function App() {
     {key:"plan",   icon:"🌱",label:lang==="th"?"วางแผน":"Plan"},
     {key:"goals",  icon:"🌟",label:lang==="th"?"ความฝัน":"Goals"},
     {key:"summary",icon:"📊",label:lang==="th"?"สรุปปี":"Summary"},
+    {key:"profile",icon:"👤",label:lang==="th"?"โปรไฟล์":"Profile"},
   ];
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
   const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setScreen("login");};
@@ -973,9 +974,9 @@ export default function App() {
       @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0;}
       body,html{font-family:'Sarabun',sans-serif;background:#FFFDF5;}
-      .app{max-width:430px;margin:0 auto;min-height:100vh;background:#FFFDF5;display:flex;flex-direction:column;padding-bottom:72px;}
-      .hdr{background:#FFFDF5;border-bottom:1.5px solid #EDE8D8;padding:14px 18px 0;position:sticky;top:0;z-index:30;}
-      .hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+      .app{max-width:430px;margin:0 auto;min-height:100vh;background:#FFFDF5;display:flex;flex-direction:column;}
+      .hdr{background:#FFFDF5;border-bottom:1.5px solid #EDE8D8;padding:10px 16px;position:sticky;top:0;z-index:30;}
+      .hdr-top{display:flex;align-items:center;justify-content:space-between;}
       .hdr-brand{display:flex;align-items:center;gap:8px;}
       .hdr-icon{width:32px;height:32px;background:#E8B84B;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;}
       .hdr-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#2C2510;}
@@ -983,18 +984,14 @@ export default function App() {
       .hdr-right{display:flex;align-items:center;gap:8px;}
       .hdr-year{font-size:10px;color:#A89660;font-weight:600;}
       .hdr-out{background:#F5EFE0;border:1.5px solid #EDE8D8;color:#A89660;width:26px;height:26px;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-      .hdr-tabs{display:flex;}
-      .htab{flex:1;padding:9px 0 8px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:10px;font-weight:700;color:#C4B88A;border-bottom:2.5px solid transparent;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:2px;}
-      .htab.on{color:#2C2510;border-bottom-color:#E8B84B;}
-      .htab-icon{font-size:15px;}
-      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(5,1fr);z-index:40;}
-      .bnav-btn{padding:8px 0 12px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;color:#C4B88A;transition:color .2s;}
+      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(6,1fr);z-index:40;padding-bottom:env(safe-area-inset-bottom);}
+      .bnav-btn{padding:8px 0 10px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;color:#C4B88A;transition:color .2s;}
       .bnav-btn.on{color:#2C2510;}
       .bnav-icon{font-size:17px;}
       .bnav-lbl{font-size:9px;font-weight:700;}
       .bnav-pip{width:14px;height:3px;border-radius:2px;background:#E8B84B;opacity:0;margin-top:1px;transition:opacity .2s;}
       .bnav-btn.on .bnav-pip{opacity:1;}
-      .tab-content{padding:14px 16px 8px;}
+      .tab-content{padding:14px 16px 8px;max-width:430px;margin:0 auto;width:100%;}
       /* Learn */
       .learn-hero{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:20px;margin-bottom:14px;color:#FFF3C4;}
       .lh-badge{display:inline-block;background:#E8B84B33;color:#E8B84B;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
@@ -1362,18 +1359,61 @@ export default function App() {
     `}</style>
     <div className="hdr">
       <div className="hdr-top">
-        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">{lang==="th"?"ภาษีฟรีแลนซ์":"Freelance Tax"}</div>{user&&<div className="hdr-user">{lang==="th"?"สวัสดี":"Hello"}, {user} 👋</div>}</div></div>
-        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1,marginRight:4}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button><button className="hdr-out" onClick={handleLogout}>↩</button></div>
+        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">{lang==="th"?"WealthWise":"WealthWise"}</div>{user&&<div className="hdr-user">{lang==="th"?"สวัสดี":"Hello"}, {user} 👋</div>}</div></div>
+        <div className="hdr-right"><div className="hdr-year">{lang==="th"?"ปี":"Year"} {YEAR_TH}</div><button style={{background:"#2C2510",color:"#FFF3C4",border:"none",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",letterSpacing:1}} onClick={()=>setLang(l=>l==="th"?"en":"th")}>{lang==="th"?"EN":"TH"}</button></div>
       </div>
-      <div className="hdr-tabs">{TABS.map(t=><button key={t.key} className={`htab ${tab===t.key?"on":""}`} onClick={()=>setTab(t.key)}><span className="htab-icon">{t.icon}</span><span>{t.label}</span></button>)}</div>
     </div>
+    <div style={{paddingBottom:80}}>
     {tab==="learn"  &&<LearnTab/>}
-    {tab==="money"  &&<MoneyTab data={data} setData={setData}/>}
-    {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal}/>}
-    {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings}/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveExpense={saveExpense}/>}
+    {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB}/>}
+    {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings}/>}
+    {tab==="profile"&&<ProfileTab user={user} email={userId} onLogout={handleLogout} lang={lang}/>}
+    </div>
     <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
   </div></LangContext.Provider>;
+}
+
+// ── Profile Tab ──────────────────────────────────────────────────────
+function ProfileTab({user, onLogout, lang}) {
+  return <div className="tab-content">
+    <div style={{background:"linear-gradient(135deg,#2C2510,#4A3E22)",borderRadius:18,padding:24,marginBottom:14,color:"#FFF3C4",textAlign:"center"}}>
+      <div style={{width:64,height:64,background:"#E8B84B",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 12px"}}>👤</div>
+      <div style={{fontSize:18,fontWeight:800,marginBottom:4}}>{user}</div>
+      <div style={{fontSize:12,color:"#A89660"}}>{lang==="th"?"สมาชิก WealthWise":"WealthWise Member"}</div>
+    </div>
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,overflow:"hidden",marginBottom:14}}>
+      <div style={{padding:"13px 16px",borderBottom:"1px solid #F5EFE0",display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:20}}>🔔</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{lang==="th"?"การแจ้งเตือน":"Notifications"}</div>
+          <div style={{fontSize:11,color:"#A89660"}}>{lang==="th"?"จัดการการแจ้งเตือน":"Manage notifications"}</div>
+        </div>
+        <span style={{color:"#C4B88A"}}>›</span>
+      </div>
+      <div style={{padding:"13px 16px",borderBottom:"1px solid #F5EFE0",display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:20}}>🔒</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{lang==="th"?"ความเป็นส่วนตัว":"Privacy"}</div>
+          <div style={{fontSize:11,color:"#A89660"}}>{lang==="th"?"ข้อมูลของคุณปลอดภัย":"Your data is safe"}</div>
+        </div>
+        <span style={{color:"#C4B88A"}}>›</span>
+      </div>
+      <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:20}}>❓</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{lang==="th"?"ช่วยเหลือ":"Help"}</div>
+          <div style={{fontSize:11,color:"#A89660"}}>{lang==="th"?"คำถามที่พบบ่อย":"FAQ"}</div>
+        </div>
+        <span style={{color:"#C4B88A"}}>›</span>
+      </div>
+    </div>
+    <button onClick={onLogout} style={{width:"100%",background:"#FFF0F0",border:"1.5px solid #F0AAAA",borderRadius:14,padding:14,fontSize:14,fontWeight:800,color:"#C04848",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      <span>↩</span> {lang==="th"?"ออกจากระบบ":"Sign Out"}
+    </button>
+    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"#C4B88A"}}>WealthWise v1.0 · {lang==="th"?"ข้อมูลของคุณปลอดภัย":"Your data is safe"} 🔒</div>
+  </div>;
 }
 
 // ── Shell (pre-login wrapper) ────────────────────────────────────────
