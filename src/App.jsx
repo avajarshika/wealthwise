@@ -1,0 +1,1317 @@
+import { useState, useRef } from "react";
+
+const MONTHS_TH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const MONTH_FULL = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+const YEAR_TH = new Date().getFullYear() + 543;
+const NOW_MONTH = new Date().getMonth();
+const EXPENSE_CATS = ["🏠 ที่พัก","🚗 เดินทาง","🍜 อาหาร","📱 โทรศัพท์","💊 สุขภาพ","📚 พัฒนาตัวเอง","🎮 บันเทิง","👗 เสื้อผ้า","💼 อุปกรณ์งาน","🔧 อื่นๆ"];
+const INVEST_OPTIONS = [
+  {id:"emergency",icon:"🛡️",label:"เงินสำรองฉุกเฉิน",desc:"เก็บไว้ 3–6 เดือนของค่าใช้จ่าย",color:"#4A7C3F",bg:"#F0FFF0"},
+  {id:"savings",  icon:"🏦",label:"ฝากธนาคาร",       desc:"ดอกเบี้ยสูงสุดฝากออมทรัพย์",  color:"#2E6DA4",bg:"#E8F5FF"},
+  {id:"ssf",      icon:"📊",label:"กองทุน SSF/RMF",  desc:"ลดภาษีได้สูงสุด 30% ของรายได้",color:"#7A4FA0",bg:"#F5F0FF"},
+  {id:"stock",    icon:"📈",label:"หุ้น / ETF",       desc:"ลงทุนระยะยาว ความเสี่ยงปานกลาง",color:"#B8860B",bg:"#FFF8DC"},
+  {id:"crypto",   icon:"₿", label:"คริปโต",           desc:"ความเสี่ยงสูง ผลตอบแทนสูง",    color:"#C04848",bg:"#FFF0F0"},
+  {id:"gold",     icon:"🥇",label:"ทองคำ",            desc:"สินทรัพย์ปลอดภัย ป้องกันเงินเฟ้อ",color:"#B8860B",bg:"#FFF8DC"},
+];
+const GOAL_PRESETS = [
+  {emoji:"✈️",label:"เที่ยวต่างประเทศ"},{emoji:"🏠",label:"ซื้อบ้าน/คอนโด"},
+  {emoji:"🚗",label:"ซื้อรถ"},{emoji:"💍",label:"แต่งงาน"},
+  {emoji:"📱",label:"ซื้ออุปกรณ์"},{emoji:"🎓",label:"เรียนต่อ"},
+  {emoji:"💼",label:"ทุนธุรกิจ"},{emoji:"🏖️",label:"เที่ยวในประเทศ"},
+  {emoji:"🌟",label:"อื่นๆ"},
+];
+const fmt = n => Math.round(n||0).toLocaleString("th-TH");
+const fmtK = n => n>=1000?`${(n/1000).toFixed(n%1000===0?0:1)}K`:fmt(n);
+
+function calcPersonalTax(income) {
+  const taxable = Math.max(0, income - income*0.6 - 60000);
+  const brackets = [[150000,0],[150000,.05],[200000,.1],[250000,.15],[250000,.2],[Infinity,.25]];
+  let tax=0,rem=taxable;
+  for(const [lim,rate] of brackets){if(rem<=0)break;tax+=Math.min(rem,lim)*rate;rem-=lim;}
+  return {taxable, tax, monthly:tax/12};
+}
+
+function calcCorpTax(revenue) {
+  const profit = revenue * 0.30;
+  let corpTax = profit<=300000?0:profit<=3000000?(profit-300000)*0.15:(3000000-300000)*0.15+(profit-3000000)*0.20;
+  const salary = Math.min(revenue*0.4, 1200000);
+  const {tax:salaryTax} = calcPersonalTax(salary);
+  const totalTax = corpTax + salaryTax;
+  return {profit, corpTax, salaryTax, salary, totalTax, tax:corpTax, taxable:profit, monthly:totalTax/12};
+}
+
+const initData = () => Array.from({length:12},(_,i)=>({month:i,income:0,expenses:[]}));
+
+// ── Google Icon ──────────────────────────────────────────────────────
+function GIcon() {
+  return <svg width="18" height="18" viewBox="0 0 48 48" style={{flexShrink:0}}>
+    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+    <path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+  </svg>;
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────
+const SLIDES=[
+  {emoji:"💡",title:"เข้าใจภาษีง่ายๆ",sub:"ไม่ต้องมีพื้นฐาน",desc:"แอปนี้จะอธิบายเรื่องภาษีฟรีแลนซ์ให้เข้าใจได้ใน 5 นาที"},
+  {emoji:"💰",title:"ติดตามการเงิน",sub:"รายได้ — ค่าใช้จ่าย",desc:"บันทึกรายรับ-รายจ่ายทุกเดือน เห็นชัดว่าเงินไปไหน"},
+  {emoji:"🌟",title:"วางแผน & ความฝัน",sub:"เงินเหลือ → ลงทุน → เป้าหมาย",desc:"รู้ว่าเงินที่เหลือควรเอาไปไว้ที่ไหน และเก็บเงินเพื่อความฝันของคุณ"},
+];
+function Onboarding({onDone}) {
+  const [i,setI]=useState(0);const [fade,setFade]=useState(false);const s=SLIDES[i];
+  const go=()=>{if(i===SLIDES.length-1){onDone();return;}setFade(true);setTimeout(()=>{setI(i+1);setFade(false);},180);};
+  return <div className="ob"><div className={`ob-body ${fade?"ob-fade":""}`}>
+    <div className="ob-ring"><span className="ob-em">{s.emoji}</span></div>
+    <div className="ob-dots">{SLIDES.map((_,j)=><div key={j} className={`od ${j===i?"od-on":""}`}/>)}</div>
+    <div className="ob-t1">{s.title}</div><div className="ob-t2">{s.sub}</div><div className="ob-t3">{s.desc}</div>
+    <button className="ob-btn" onClick={go}>{i===SLIDES.length-1?"เริ่มใช้งาน →":"ถัดไป →"}</button>
+    {i<SLIDES.length-1&&<button className="ob-skip" onClick={onDone}>ข้าม</button>}
+  </div></div>;
+}
+
+// ── Login ────────────────────────────────────────────────────────────
+function Login({onLogin}) {
+  const [mode,setMode]=useState("login");const [name,setName]=useState("");const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");const [err,setErr]=useState("");const [loading,setLoading]=useState(false);
+  const [gLoad,setGLoad]=useState(false);const [gStep,setGStep]=useState("");
+  const handleGoogle=()=>{setGLoad(true);setErr("");setGStep("picking");setTimeout(()=>{setGStep("auth");setTimeout(()=>{setGLoad(false);onLogin("นักพัฒนา ฟรีแลนซ์");},700);},1400);};
+  const submit=()=>{setErr("");if(mode==="register"&&!name.trim()){setErr("กรุณาใส่ชื่อ");return;}if(!email.includes("@")){setErr("อีเมลไม่ถูกต้อง");return;}if(pass.length<6){setErr("รหัสผ่านต้องมีอย่างน้อย 6 ตัว");return;}setLoading(true);setTimeout(()=>{setLoading(false);onLogin(name||email.split("@")[0]);},900);};
+  return <div className="lw">
+    <div className="ldeco"><div className="ldc c1"/><div className="ldc c2"/><div className="ldc c3"/></div>
+    <div className="lbrand"><div className="licon">🧾</div><div className="ltitle">ภาษีฟรีแลนซ์</div><div className="lsub">จัดการเงิน · ภาษี · การลงทุน</div></div>
+    <div className="lcard">
+      <button className={`gbtn ${gLoad?"gbtn-load":""}`} onClick={handleGoogle} disabled={gLoad||loading}>
+        {gLoad?(<><span className="gspin"/><span>{gStep==="picking"?"กำลังเลือกบัญชี...":"กำลังเข้าสู่ระบบ..."}</span></>):(<><GIcon/><span>{mode==="login"?"เข้าสู่ระบบด้วย Google":"สมัครด้วย Google"}</span></>)}
+      </button>
+      <div className="lor"><div className="lorline"/><span className="lortext">หรือใช้อีเมล</span><div className="lorline"/></div>
+      <div className="ltabs"><button className={`ltb ${mode==="login"?"ltb-on":""}`} onClick={()=>{setMode("login");setErr("");}}>เข้าสู่ระบบ</button><button className={`ltb ${mode==="register"?"ltb-on":""}`} onClick={()=>{setMode("register");setErr("");}}>สมัครสมาชิก</button></div>
+      {mode==="register"&&<><label className="ll">ชื่อของคุณ</label><input className="li" placeholder="เช่น สมชาย ใจดี" value={name} onChange={e=>setName(e.target.value)}/></>}
+      <label className="ll">อีเมล</label><input className="li" type="email" placeholder="example@email.com" value={email} onChange={e=>setEmail(e.target.value)}/>
+      <label className="ll">รหัสผ่าน</label><input className="li" type="password" placeholder={mode==="register"?"อย่างน้อย 6 ตัวอักษร":"••••••••"} value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+      {err&&<div className="lerr">⚠️ {err}</div>}
+      <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading||gLoad}>{loading?<span className="gspin"/>:mode==="login"?"เข้าสู่ระบบ":"สมัครสมาชิก"}</button>
+      {mode==="login"&&<div className="lforgot">ลืมรหัสผ่าน?</div>}
+    </div>
+    <button className="guest-btn" onClick={()=>onLogin("ผู้ทดลองใช้")} disabled={loading||gLoad}>
+      <span className="guest-icon">👀</span>
+      <div className="guest-txt"><div className="guest-lbl">ทดลองใช้แบบไม่ต้องสมัคร</div><div className="guest-sub">เข้าดูเนื้อหาได้ทั้งหมด ไม่มีข้อผูกมัด</div></div>
+      <span className="guest-arr">→</span>
+    </button>
+    <div className="lfooter">🔒 ข้อมูลของคุณปลอดภัยและเป็นส่วนตัว</div>
+  </div>;
+}
+
+// ── Learn Tab ────────────────────────────────────────────────────────
+const FAQ=[
+  {q:"ฟรีแลนซ์ต้องเสียภาษีไหม?",a:"ต้องครับ! ถ้ารายได้เกิน 60,000 บาท/ปี ต้องยื่นภาษี แต่ไม่แปลว่าต้องจ่าย เพราะยังมีค่าลดหย่อนช่วยอีก",tag:"พื้นฐาน",color:"#E8B84B"},
+  {q:"ภาษีคำนวณจากอะไร?",a:"จาก 'เงินได้สุทธิ' = รายได้ − ค่าใช้จ่าย(60%) − ลดหย่อนส่วนตัว(60,000) − ลดหย่อนอื่นๆ",tag:"คำนวณ",color:"#5BA3D9"},
+  {q:"ค่าลดหย่อนคืออะไร?",a:"ตัวช่วยลดฐานภาษี เช่น ลดหย่อนส่วนตัว 60,000 บาท, ประกันชีวิต, RMF/SSF ยิ่งลดหย่อนมาก ยิ่งเสียภาษีน้อย",tag:"ลดหย่อน",color:"#6ABF6A"},
+  {q:"ควรจดบริษัทดีไหม?",a:"ถ้ารายได้เกิน 1–2 ล้านบาท/ปี การจดบริษัทมักประหยัดภาษีกว่า เพราะหักค่าใช้จ่ายได้มากกว่า และอัตรา SME อยู่ที่ 15–20% เทียบกับบุคคลสูงสุด 35%",tag:"บริษัท",color:"#7A4FA0"},
+  {q:"ต้องยื่นภาษีเมื่อไหร่?",a:"ปีละ 1 ครั้ง ช่วงมกราคม–มีนาคม ของปีถัดไป ยื่นออนไลน์ได้ที่ efiling.rd.go.th ไม่ต้องไปสำนักงาน",tag:"ขั้นตอน",color:"#A07FD0"},
+];
+function LearnTab() {
+  const [open,setOpen]=useState(null);
+  const [taxType,setTaxType]=useState("personal");
+  const [income,setIncome]=useState("");
+  const [result,setResult]=useState(null);
+  const calc=()=>{
+    const inc=parseFloat(income)||0;
+    if(taxType==="personal"){const r=calcPersonalTax(inc);setResult({type:"personal",inc,...r});}
+    else{const r=calcCorpTax(inc);setResult({type:"company",inc,...r});}
+  };
+  return <div className="tab-content">
+    <div className="learn-hero"><div className="lh-badge">ความรู้พื้นฐาน</div><div className="lh-title">ภาษีฟรีแลนซ์<br/>ไม่ยากอย่างที่คิด</div><div className="lh-sub">คำถามที่คนมักสงสัย ตอบให้เข้าใจใน 1 นาที</div></div>
+    <div className="faq-list">{FAQ.map((l,i)=>(
+      <div key={i} className={`faq-card ${open===i?"faq-open":""}`} onClick={()=>setOpen(open===i?null:i)}>
+        <div className="faq-row"><span className="faq-tag" style={{background:l.color+"22",color:l.color}}>{l.tag}</span><div className="faq-q">{l.q}</div><span className="faq-chev">{open===i?"▲":"▼"}</span></div>
+        {open===i&&<div className="faq-a">{l.a}</div>}
+      </div>
+    ))}</div>
+
+    <div className="learn-calc">
+      <div className="lc-title">🧮 คำนวณภาษีคร่าวๆ</div>
+      <div className="lc-sub">เลือกประเภทก่อน แล้วใส่รายได้ทั้งปี</div>
+
+      {/* Tax type toggle */}
+      <div className="tax-toggle">
+        <button className={`ttbtn ${taxType==="personal"?"ttbtn-on":""}`} onClick={()=>{setTaxType("personal");setResult(null);}}>
+          <span style={{fontSize:20}}>👤</span>
+          <div><div className="ttbtn-lbl">บุคคลธรรมดา</div><div className="ttbtn-sub">อัตราขั้นบันได 0–35%</div></div>
+        </button>
+        <button className={`ttbtn ${taxType==="company"?"ttbtn-on ttbtn-corp":""}`} onClick={()=>{setTaxType("company");setResult(null);}}>
+          <span style={{fontSize:20}}>🏢</span>
+          <div><div className="ttbtn-lbl">นิติบุคคล (บริษัท)</div><div className="ttbtn-sub">SME 15–20% flat</div></div>
+        </button>
+      </div>
+      {taxType==="company"&&<div className="corp-tip">💡 เหมาะกับฟรีแลนซ์ที่จดบริษัทรับงาน — หักค่าใช้จ่ายได้มากกว่า และอัตราภาษีนิ่งกว่า โดยเฉพาะรายได้เกิน 1 ล้านบาท/ปี</div>}
+
+      <div className="lc-row">
+        <input className="lc-inp" type="number" placeholder={taxType==="personal"?"รายได้ทั้งปี (บาท)":"รายได้บริษัท/ปี (บาท)"} value={income} onChange={e=>setIncome(e.target.value)} onKeyDown={e=>e.key==="Enter"&&calc()}/>
+        <button className="lc-btn" onClick={calc}>คำนวณ</button>
+      </div>
+
+      {result&&result.type==="personal"&&(
+        <div className="lc-result">
+          <div className="lcr-row"><span>รายได้ทั้งปี</span><span className="lcr-v">{fmt(result.inc)} ฿</span></div>
+          <div className="lcr-row"><span>หักค่าใช้จ่าย 60%</span><span className="lcr-v neg">−{fmt(result.inc*0.6)} ฿</span></div>
+          <div className="lcr-row"><span>หักลดหย่อนส่วนตัว</span><span className="lcr-v neg">−60,000 ฿</span></div>
+          <div className="lcr-row base"><span>เงินได้สุทธิ</span><span className="lcr-v">{fmt(result.taxable)} ฿</span></div>
+          <div className={`lcr-tax ${result.tax===0?"lct-safe":"lct-warn"}`}>
+            <div className="lct-label">👤 ภาษีบุคคลธรรมดา / ปี</div>
+            <div className="lct-val">{result.tax===0?"ไม่ต้องจ่าย 🎉":`${fmt(result.tax)} บาท`}</div>
+            {result.tax>0&&<div className="lct-mo">≈ เดือนละ {fmt(result.monthly)} บาท</div>}
+          </div>
+        </div>
+      )}
+      {result&&result.type==="company"&&(
+        <div className="lc-result">
+          <div className="lcr-row"><span>รายได้บริษัท</span><span className="lcr-v">{fmt(result.inc)} ฿</span></div>
+          <div className="lcr-row"><span>หักค่าใช้จ่ายธุรกิจ ~70%</span><span className="lcr-v neg">−{fmt(result.inc*0.7)} ฿</span></div>
+          <div className="lcr-row base"><span>กำไรสุทธิ</span><span className="lcr-v">{fmt(result.profit)} ฿</span></div>
+          <div className="lcr-tax" style={{background:"#F5F0FF"}}>
+            <div className="lct-label" style={{color:"#7A4FA0"}}>🏢 ภาษีนิติบุคคล (SME)</div>
+            <div className="lct-val" style={{color:"#7A4FA0"}}>{fmt(result.corpTax)} บาท</div>
+            <div className="lct-mo" style={{color:"#A07FD0"}}>อัตราเฉลี่ย {result.profit>0?((result.corpTax/result.profit)*100).toFixed(1):0}%</div>
+          </div>
+          {result.salaryTax>0&&<div className="lcr-tax" style={{background:"#FFF5F0",marginTop:8}}>
+            <div className="lct-label" style={{color:"#C04848"}}>👤 ภาษีเงินเดือนตัวเอง (สมมติ {fmt(result.salary)} ฿/ปี)</div>
+            <div className="lct-val" style={{color:"#C04848"}}>{fmt(result.salaryTax)} บาท</div>
+          </div>}
+          <div className="lcr-tax" style={{background:"#E8F5FF",marginTop:8}}>
+            <div className="lct-label" style={{color:"#2E6DA4"}}>📊 ภาษีรวมทั้งหมด</div>
+            <div className="lct-val" style={{color:"#2E6DA4"}}>{fmt(result.totalTax)} บาท</div>
+            <div className="lct-mo" style={{color:"#5BA3D9"}}>เทียบบุคคลธรรมดา: ประหยัดได้ ~{fmt(Math.max(0,calcPersonalTax(result.inc).tax-result.totalTax))} บาท/ปี</div>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div className="rate-card">
+      <div className="rate-title">{taxType==="personal"?"👤 อัตราภาษีบุคคลธรรมดา":"🏢 อัตราภาษีนิติบุคคล (SME)"}</div>
+      {(taxType==="personal"?[["0 – 150,000","ยกเว้น","#4A7C3F"],["150,001 – 300,000","5%","#2E6DA4"],["300,001 – 500,000","10%","#B8860B"],["500,001 – 750,000","15%","#B8860B"],["750,001 – 1,000,000","20%","#C04848"],["1,000,001 – 2,000,000","25%","#C04848"],["2,000,001+","35%","#8B0000"]]:[["กำไรสุทธิ 0 – 300,000","ยกเว้น","#4A7C3F"],["300,001 – 3,000,000","15%","#B8860B"],["3,000,001+","20%","#C04848"]]).map(([r,p,c],i)=>(
+        <div className="rate-row" key={i}><span className="rate-range">{r}</span><span className="rate-pct" style={{color:c}}>{p}</span></div>
+      ))}
+      {taxType==="company"&&<div className="rate-note">* คำนวณจากกำไรสุทธิ ไม่ใช่รายได้ทั้งหมด — เหมาะกับผู้มีรายได้เกิน 1–2 ล้านบาท/ปี</div>}
+    </div>
+  </div>;
+}
+
+// ── Money Tab ────────────────────────────────────────────────────────
+function AddSheet({title,onSave,onClose,hasCategory}) {
+  const [desc,setDesc]=useState("");const [amount,setAmount]=useState("");const [cat,setCat]=useState(EXPENSE_CATS[0]);
+  const save=()=>{if(!amount)return;onSave({id:Date.now(),desc:desc||(hasCategory?cat:"รายการ"),amount:parseFloat(amount),cat:hasCategory?cat:null});onClose();};
+  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="sheet">
+      <div className="sheet-pill"/>
+      <div className="sheet-ttl">{title}</div>
+      {hasCategory&&<div className="cat-scroll">{EXPENSE_CATS.map(c=><button key={c} className={`cat-chip ${cat===c?"cat-on":""}`} onClick={()=>setCat(c)}>{c}</button>)}</div>}
+      <input className="sinp" placeholder="รายละเอียด (ไม่บังคับ)" value={desc} onChange={e=>setDesc(e.target.value)}/>
+      <input className="sinp sinp-lg" type="number" placeholder="จำนวนเงิน (บาท)" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
+      <div className="sheet-btns"><button className="sbtn-c" onClick={onClose}>ยกเลิก</button><button className="sbtn-s" onClick={save}>บันทึก ✓</button></div>
+    </div>
+  </div>;
+}
+
+function MoneyTab({data,setData}) {
+  const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
+  const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
+  const annualInc=data.reduce((s,d)=>s+d.income,0);const {monthly:taxMo}=calcPersonalTax(annualInc);
+  const addIncome=({amount})=>setData(d=>d.map((r,i)=>i===sel?{...r,income:amount}:r));
+  const addExp=entry=>setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));
+  const delExp=id=>setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.filter(e=>e.id!==id)}:r));
+  const expPct=Math.min((totalExp/Math.max(m.income,1))*100,100);
+  return <div className="tab-content">
+    <div className="month-scroll">{MONTHS_TH.map((mo,i)=><button key={i} className={`mo-chip ${sel===i?"mo-on":""}`} onClick={()=>setSel(i)}>{mo}{data[i].income>0&&<span className="mo-dot"/>}</button>)}</div>
+    <div className="money-hero">
+      <div className="mh-month">{MONTH_FULL[sel]} {YEAR_TH}</div>
+      <div className="mh-cols">
+        <div className="mhc"><div className="mhc-label">รายได้</div><div className="mhc-val inc">{fmt(m.income)}<span className="mhc-unit"> ฿</span></div></div>
+        <div className="mhc-sep"/>
+        <div className="mhc"><div className="mhc-label">ค่าใช้จ่าย</div><div className="mhc-val exp">{fmt(totalExp)}<span className="mhc-unit"> ฿</span></div></div>
+        <div className="mhc-sep"/>
+        <div className="mhc"><div className="mhc-label">คงเหลือ</div><div className={`mhc-val ${net>=0?"inc":"exp"}`}>{fmt(Math.abs(net))}<span className="mhc-unit"> ฿</span></div></div>
+      </div>
+      {m.income>0&&<div className="flow-bar-wrap"><div className="flow-bar"><div className="flow-seg flow-exp" style={{width:`${expPct}%`}}/><div className="flow-seg flow-tax" style={{width:`${Math.min((taxMo/m.income)*100,100)}%`}}/></div><div className="flow-legend"><span><span className="fleg exp"/> ค่าใช้จ่าย {Math.round(expPct)}%</span><span><span className="fleg tax"/> ภาษีประมาณ</span></div></div>}
+    </div>
+    <div className="sec-hd"><span>💰 รายได้เดือนนี้</span><button className="sec-add" onClick={()=>setSheet("income")}>{m.income>0?"แก้ไข":"+ เพิ่ม"}</button></div>
+    {m.income===0?<div className="empty-card" onClick={()=>setSheet("income")}>แตะเพื่อบันทึกรายได้เดือนนี้ →</div>:<div className="income-card"><span className="ic-emoji">💰</span><div><div className="ic-label">รายได้รวม</div><div className="ic-amt">{fmt(m.income)} บาท</div></div></div>}
+    <div className="sec-hd"><span>📤 ค่าใช้จ่าย</span><button className="sec-add" onClick={()=>setSheet("expense")}>+ เพิ่ม</button></div>
+    {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
+    {m.income>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
+    {sheet&&<AddSheet title={sheet==="income"?"บันทึกรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
+  </div>;
+}
+
+// ── Invest Sheet (with goal linking) ────────────────────────────────
+function InvestSheet({opt,selMonth,savings,onSave,onClose,goals,onDepositGoal}) {
+  const [month,setMonth]=useState(selMonth);const [amount,setAmount]=useState("");const [note,setNote]=useState("");const [linkedGoal,setLinkedGoal]=useState(null);
+  const existing=savings[opt.id]?.[month]||[];const totalMo=existing.reduce((s,r)=>s+r.amount,0);
+  const save=()=>{
+    if(!amount)return;
+    const entry={id:Date.now(),amount:parseFloat(amount),note:note||opt.label,date:new Date().toLocaleDateString("th-TH"),goalId:linkedGoal||null};
+    onSave(opt.id,month,entry);
+    if(linkedGoal&&onDepositGoal) onDepositGoal(linkedGoal,{id:Date.now()+1,amount:parseFloat(amount),note:`${opt.icon} ${opt.label}${note?" — "+note:""}`,date:new Date().toLocaleDateString("th-TH")});
+    setAmount("");setNote("");setLinkedGoal(null);
+  };
+  const del=id=>onSave(opt.id,month,null,id);
+  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="sheet" style={{maxHeight:"88vh"}}>
+      <div className="sheet-pill"/>
+      <div className="inv-sheet-hd" style={{borderLeft:`4px solid ${opt.color}`}}><div className="inv-sh-icon" style={{background:opt.bg}}>{opt.icon}</div><div><div className="inv-sh-title">{opt.label}</div><div className="inv-sh-desc">{opt.desc}</div></div></div>
+      <div className="ish-sec-label">เลือกเดือน</div>
+      <div className="ish-months">{MONTHS_TH.map((mo,i)=>{const has=(savings[opt.id]?.[i]||[]).length>0;return <button key={i} className={`ish-mo ${month===i?"ish-mo-on":""}`} style={month===i?{background:opt.color,borderColor:opt.color}:{}} onClick={()=>setMonth(i)}>{mo}{has&&<span className="ish-mo-dot"/>}</button>;})}</div>
+      <div className="ish-sec-label">{MONTH_FULL[month]} — บันทึก{opt.label}</div>
+      {existing.length>0?<div className="ish-records">{existing.map(r=><div className="ish-rec" key={r.id}><div className="ish-rec-dot" style={{background:opt.color}}/><div className="ish-rec-info"><div className="ish-rec-note">{r.note}{r.goalId&&<span className="ish-rec-goal-tag">🌟</span>}</div><div className="ish-rec-date">{r.date}</div></div><div className="ish-rec-amt" style={{color:opt.color}}>+{fmt(r.amount)} ฿</div><button className="del-btn" onClick={()=>del(r.id)}>🗑</button></div>)}<div className="ish-month-total">รวม{MONTHS_TH[month]} <strong style={{color:opt.color}}>{fmt(totalMo)} บาท</strong></div></div>:<div className="ish-empty">ยังไม่มีบันทึกในเดือนนี้</div>}
+      {/* Goal linking */}
+      {goals&&goals.filter(g=>g.saved<g.target).length>0&&<div className="ish-goal-link">
+        <div className="ish-goal-label">🌟 นับรวมในเป้าหมายด้วยไหม?</div>
+        <div className="ish-goal-opts">
+          <button className={`ish-goal-btn ${!linkedGoal?"ish-goal-on":""}`} onClick={()=>setLinkedGoal(null)}>ไม่ระบุ</button>
+          {goals.filter(g=>g.saved<g.target).map(g=><button key={g.id} className={`ish-goal-btn ${linkedGoal===g.id?"ish-goal-on":""}`} style={linkedGoal===g.id?{borderColor:"#7A4FA0",background:"#F5F0FF",color:"#7A4FA0"}:{}} onClick={()=>setLinkedGoal(g.id)}>{g.emoji} {g.name}</button>)}
+        </div>
+      </div>}
+      <div className="ish-form">
+        <input className="sinp" placeholder={`หมายเหตุ เช่น ซื้อ ${opt.label} ครั้งที่ 1`} value={note} onChange={e=>setNote(e.target.value)}/>
+        <div className="ish-amt-row"><input className="sinp sinp-lg" type="number" placeholder="จำนวนเงิน (บาท)" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/><button className="ish-save-btn" style={{background:opt.color}} onClick={save}>บันทึก</button></div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── Plan Tab ─────────────────────────────────────────────────────────
+function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal}) {
+  const totalIncome=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const {tax}=calcPersonalTax(totalIncome);const afterTax=Math.max(0,totalIncome-totalExp-tax);
+  const [openOpt,setOpenOpt]=useState(null);const [selMonth]=useState(NOW_MONTH);
+  const handleSave=(optId,monthIdx,entry,delId)=>setSavings(prev=>{const cur=prev[optId]?.[monthIdx]||[];const upd=delId?cur.filter(r=>r.id!==delId):[...cur,entry];return {...prev,[optId]:{...(prev[optId]||{}),[monthIdx]:upd}};});
+  const totalForOpt=id=>Object.values(savings[id]||{}).flat().reduce((s,r)=>s+r.amount,0);
+  const grandTotal=INVEST_OPTIONS.reduce((s,o)=>s+totalForOpt(o.id),0);
+  return <div className="tab-content">
+    <div className="plan-hero">
+      <div className="ph-label">เงินคงเหลือหลังหักทุกอย่าง (ปีนี้)</div>
+      <div className="ph-val">{fmt(afterTax)} <span className="ph-unit">บาท</span></div>
+      <div className="ph-rows">
+        <div className="ph-row"><span>รายได้รวม</span><span className="phv-inc">{fmt(totalIncome)} ฿</span></div>
+        <div className="ph-row"><span>ค่าใช้จ่ายรวม</span><span className="phv-exp">−{fmt(totalExp)} ฿</span></div>
+        <div className="ph-row"><span>ภาษีประมาณ</span><span className="phv-exp">−{fmt(tax)} ฿</span></div>
+        <div className="ph-row ph-row-bold"><span>เงินที่เหลือจริง</span><span>{fmt(afterTax)} ฿</span></div>
+      </div>
+    </div>
+    <div className="rule-card">
+      <div className="rule-title">📐 กฎ 50/30/20</div>
+      <div className="rule-rows">{[{pct:50,label:"ความจำเป็น",desc:"ที่พัก อาหาร เดินทาง",color:"#E8B84B"},{pct:30,label:"ความต้องการ",desc:"ท่องเที่ยว ของฟุ่มเฟือย",color:"#5BA3D9"},{pct:20,label:"ออม/ลงทุน",desc:"กองทุน หุ้น ทองคำ",color:"#6ABF6A"}].map(r=><div className="rule-row" key={r.label}><div className="rule-bar-wrap"><div className="rule-bar-fill" style={{width:`${r.pct}%`,background:r.color}}/></div><div className="rule-info"><span className="rule-pct" style={{color:r.color}}>{r.pct}%</span><span className="rule-label">{r.label}</span><span className="rule-amt">{fmt(afterTax*r.pct/100)} ฿</span></div><div className="rule-desc">{r.desc}</div></div>)}</div>
+    </div>
+    {grandTotal>0&&<div className="savings-bar-card"><div className="sbc-top"><span className="sbc-label">ออม/ลงทุนสะสมปีนี้</span><span className="sbc-total">{fmt(grandTotal)} ฿</span></div><div className="sbc-track">{INVEST_OPTIONS.map(o=>{const t=totalForOpt(o.id);if(!t)return null;return <div key={o.id} className="sbc-seg" style={{width:`${(t/grandTotal)*100}%`,background:o.color}}/>;})}</div></div>}
+    <div className="sec-hd" style={{padding:"0 0 8px"}}><span>🌱 กดการ์ดเพื่อบันทึกการออม</span></div>
+    <div className="invest-list">{INVEST_OPTIONS.map(opt=>{const total=totalForOpt(opt.id);const moTotal=(savings[opt.id]?.[NOW_MONTH]||[]).reduce((s,r)=>s+r.amount,0);const hasAny=total>0;return <div className="invest-card inv-tappable" key={opt.id} style={{borderColor:hasAny?opt.color+"88":opt.color+"33"}} onClick={()=>setOpenOpt(opt)}>
+      <div className="inv-left"><div className="inv-icon" style={{background:opt.bg}}>{opt.icon}</div><div><div className="inv-label">{opt.label}</div><div className="inv-desc">{opt.desc}</div>{moTotal>0&&<div className="inv-this-month" style={{color:opt.color}}>เดือนนี้ +{fmt(moTotal)} ฿</div>}</div></div>
+      <div className="inv-right">{hasAny?<><div className="inv-total-val" style={{color:opt.color}}>{fmt(total)} ฿</div><div className="inv-total-label">สะสมปีนี้</div></>:<div className="inv-tap-hint" style={{color:opt.color+"99"}}>แตะเพื่อบันทึก</div>}</div>
+    </div>;})}
+    </div>
+    <div className="invest-note">💡 แตะการ์ด → เลือกเดือน → ใส่จำนวน → เลือกเป้าหมายที่จะนับรวมได้ด้วย</div>
+    {openOpt&&<InvestSheet opt={openOpt} selMonth={selMonth} savings={savings} onSave={handleSave} onClose={()=>setOpenOpt(null)} goals={goals} onDepositGoal={onDepositGoal}/>}
+  </div>;
+}
+
+// ── Goal Sheet ───────────────────────────────────────────────────────
+function GoalSheet({existing,onSave,onClose}) {
+  const [emoji,setEmoji]=useState(existing?.emoji||"✈️");const [name,setName]=useState(existing?.name||"");
+  const [target,setTarget]=useState(existing?.target||"");const [deadline,setDeadline]=useState(existing?.deadline||"");
+  const mo=()=>{if(!deadline)return null;const [y,m]=deadline.split("-").map(Number);const now=new Date();return Math.max(1,(y-now.getFullYear())*12+(m-now.getMonth()-1));};
+  const moLeft=mo();const need=moLeft?Math.ceil((parseFloat(target||0)-(existing?.saved||0))/moLeft):0;
+  const save=()=>{if(!name.trim()||!target)return;onSave({id:existing?.id||Date.now(),emoji,name,target:parseFloat(target),deadline,saved:existing?.saved||0,deposits:existing?.deposits||[]});onClose();};
+  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="sheet" style={{maxHeight:"88vh"}}>
+      <div className="sheet-pill"/>
+      <div className="sheet-ttl">{existing?"แก้ไขเป้าหมาย":"เพิ่มเป้าหมายใหม่"}</div>
+      <div className="gs-emoji-row">{GOAL_PRESETS.map(p=><button key={p.emoji} className={`gs-emoji-btn ${emoji===p.emoji?"gs-emoji-on":""}`} onClick={()=>{setEmoji(p.emoji);if(!name)setName(p.label);}}><span style={{fontSize:22}}>{p.emoji}</span><span className="gs-emoji-label">{p.label}</span></button>)}</div>
+      <label className="ish-sec-label">ชื่อเป้าหมาย</label><input className="sinp" placeholder="เช่น ไปเที่ยวญี่ปุ่นปลายปี" value={name} onChange={e=>setName(e.target.value)}/>
+      <label className="ish-sec-label">เงินที่ต้องการ (บาท)</label><input className="sinp sinp-lg" type="number" placeholder="เช่น 50000" value={target} onChange={e=>setTarget(e.target.value)}/>
+      <label className="ish-sec-label">กำหนดเวลา</label><input className="sinp" type="month" value={deadline} onChange={e=>setDeadline(e.target.value)}/>
+      {moLeft&&parseFloat(target||0)>0&&<div className="gs-calc-hint"><span>📅 เหลืออีก {moLeft} เดือน → ต้องเก็บเดือนละประมาณ</span><span className="gs-calc-amt">{fmt(need)} บาท</span></div>}
+      <div className="sheet-btns" style={{marginTop:8}}><button className="sbtn-c" onClick={onClose}>ยกเลิก</button><button className="sbtn-s" onClick={save}>บันทึกเป้าหมาย ✓</button></div>
+    </div>
+  </div>;
+}
+
+// ── Goal Detail Sheet (monthly tracker) ─────────────────────────────
+function GoalDetailSheet({goal, onDeposit, onDeleteDeposit, onClose}) {
+  const [addMonth, setAddMonth] = useState(NOW_MONTH);
+  const [amount, setAmount]     = useState("");
+  const [note, setNote]         = useState("");
+
+  // group deposits by month index
+  const byMonth = Array.from({length:12}, () => []);
+  (goal.deposits||[]).forEach(d => {
+    // date stored as localeDateString — parse month from note or fallback to addMonth
+    // We store monthIdx on deposit when saving
+    const mi = d.monthIdx ?? NOW_MONTH;
+    byMonth[mi].push(d);
+  });
+
+  const monthlyTarget = goal.deadline ? (() => {
+    const [y,m] = goal.deadline.split("-").map(Number);
+    const now = new Date();
+    const totalMo = Math.max(1,(y-now.getFullYear())*12+(m-now.getMonth()-1)+
+      (goal.deposits?.length>0?0:0)); // use remaining months from now
+    const remaining = Math.max(1,(y-now.getFullYear())*12+(m-now.getMonth()-1));
+    return Math.ceil((goal.target - goal.saved) / remaining);
+  })() : 0;
+
+  const save = () => {
+    if(!amount) return;
+    onDeposit(goal.id, {
+      id: Date.now(),
+      amount: parseFloat(amount),
+      note: note || MONTH_FULL[addMonth],
+      date: new Date().toLocaleDateString("th-TH"),
+      monthIdx: addMonth,
+    });
+    setAmount(""); setNote("");
+  };
+
+  const pct = Math.min((goal.saved / goal.target) * 100, 100);
+  const remaining = goal.target - goal.saved;
+
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet" style={{maxHeight:"92vh"}}>
+        <div className="sheet-pill"/>
+
+        {/* Header */}
+        <div className="gd-header">
+          <span className="gd-emoji">{goal.emoji}</span>
+          <div className="gd-meta">
+            <div className="gd-name">{goal.name}</div>
+            {goal.deadline&&<div className="gd-dl">🗓 {goal.deadline.replace("-","/")} · เหลือ {remaining>0?fmt(remaining):"ครบแล้ว"} บาท</div>}
+          </div>
+        </div>
+
+        {/* Overall progress */}
+        <div className="gd-prog-card">
+          <div className="gd-prog-nums">
+            <span className="gd-saved">{fmt(goal.saved)} ฿</span>
+            <span className="gd-pct">{Math.round(pct)}%</span>
+            <span className="gd-target">{fmt(goal.target)} ฿</span>
+          </div>
+          <div className="gd-prog-track">
+            <div className="gd-prog-fill" style={{width:`${pct}%`, background:pct>=100?"#6ABF6A":"#E8B84B"}}/>
+          </div>
+          {monthlyTarget>0&&remaining>0&&(
+            <div className="gd-hint">ต้องเก็บเดือนละ <strong style={{color:"#B8860B"}}>{fmt(monthlyTarget)} บาท</strong> เพื่อให้ถึงเป้า</div>
+          )}
+        </div>
+
+        {/* Monthly timeline */}
+        <div className="ish-sec-label" style={{marginBottom:10}}>ประวัติการออมรายเดือน</div>
+        <div className="gd-timeline">
+          {MONTHS_TH.map((mo, mi) => {
+            const deps = byMonth[mi];
+            const moTotal = deps.reduce((s,d)=>s+d.amount,0);
+            const isOnTrack = monthlyTarget > 0 && moTotal >= monthlyTarget;
+            const hasData   = deps.length > 0;
+            const isPast    = mi <= NOW_MONTH;
+            return (
+              <div key={mi} className={`gd-mo-row ${addMonth===mi?"gd-mo-sel":""}`}
+                onClick={()=>setAddMonth(mi)}>
+                <div className="gd-mo-left">
+                  <div className={`gd-mo-badge ${hasData?(isOnTrack?"gd-mo-ok":"gd-mo-partial"):"gd-mo-empty"}`}>
+                    {hasData ? (isOnTrack?"✓":"·") : (isPast?"–":"○")}
+                  </div>
+                  <span className="gd-mo-name">{mo}</span>
+                </div>
+                <div className="gd-mo-mid">
+                  {hasData && (
+                    <div className="gd-mo-bar-track">
+                      <div className="gd-mo-bar-fill" style={{
+                        width: monthlyTarget>0 ? `${Math.min((moTotal/monthlyTarget)*100,100)}%` : "100%",
+                        background: isOnTrack ? "#6ABF6A" : "#E8B84B"
+                      }}/>
+                    </div>
+                  )}
+                </div>
+                <div className="gd-mo-right">
+                  {hasData ? (
+                    <span className={`gd-mo-amt ${isOnTrack?"gd-mo-amt-ok":""}`}>+{fmt(moTotal)} ฿</span>
+                  ) : (
+                    <span className="gd-mo-add-hint">{addMonth===mi?"← เพิ่มที่นี่":"แตะ"}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Deposit list for selected month */}
+        {byMonth[addMonth].length > 0 && (
+          <div className="gd-dep-list">
+            <div className="ish-sec-label">{MONTH_FULL[addMonth]} — รายละเอียด</div>
+            {byMonth[addMonth].map(d=>(
+              <div className="gd-dep-row" key={d.id}>
+                <span className="gd-dep-dot"/>
+                <div className="gd-dep-info">
+                  <div className="gd-dep-note">{d.note}</div>
+                  <div className="gd-dep-date">{d.date}</div>
+                </div>
+                <div className="gd-dep-amt">+{fmt(d.amount)} ฿</div>
+                <button className="del-btn" onClick={()=>onDeleteDeposit(goal.id,d.id)}>🗑</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add form */}
+        <div className="gd-add-form">
+          <div className="gd-add-title">+ เพิ่มยอดออม — <strong>{MONTH_FULL[addMonth]}</strong></div>
+          <input className="sinp" placeholder="หมายเหตุ (ไม่บังคับ)" value={note} onChange={e=>setNote(e.target.value)}/>
+          <div className="ish-amt-row">
+            <input className="sinp sinp-lg" type="number" placeholder="จำนวนเงิน (บาท)"
+              value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
+            <button className="ish-save-btn" style={{background:"#E8B84B",color:"#2C2510"}} onClick={save}>บันทึก</button>
+          </div>
+        </div>
+
+        <button className="sbtn-c" style={{width:"100%",marginTop:4}} onClick={onClose}>ปิด</button>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Retirement Planner ───────────────────────────────────────────────
+function RetirementPlanner({onClose}) {
+  const [age,    setAge]    = useState("30");
+  const [retAge, setRetAge] = useState("55");
+  const [lifeAge,setLifeAge]= useState("85");
+  const [expense,setExpense]= useState("");
+  const [inflation,setInflation]=useState("3");
+  const [returnRate,setReturn]  = useState("6");
+  const [currentSavings,setCurSav]=useState("0");
+  const [result, setResult] = useState(null);
+
+  const calc = () => {
+    const a   = parseInt(age)||30;
+    const ra  = parseInt(retAge)||55;
+    const la  = parseInt(lifeAge)||85;
+    const exp = parseFloat(expense)||0;
+    const inf = (parseFloat(inflation)||3) / 100;
+    const ret = (parseFloat(returnRate)||6) / 100;
+    const cur = parseFloat(currentSavings)||0;
+
+    const yearsToRetire = Math.max(1, ra - a);
+    const yearsInRetire = Math.max(1, la - ra);
+
+    // ค่าใช้จ่ายต่อเดือนตอนเกษียณ (ปรับเงินเฟ้อ)
+    const expAtRetire = exp * Math.pow(1 + inf, yearsToRetire);
+
+    // เงินที่ต้องมีทั้งหมดวันเกษียณ (Present Value of annuity ใช้ real rate)
+    // real monthly rate after inflation
+    const monthlyRealRate = (ret - inf) / 12;
+    const months = yearsInRetire * 12;
+    let totalNeeded;
+    if(Math.abs(monthlyRealRate) < 0.0001) {
+      totalNeeded = expAtRetire * months;
+    } else {
+      // PV of annuity
+      totalNeeded = expAtRetire * (1 - Math.pow(1+monthlyRealRate,-months)) / monthlyRealRate;
+    }
+
+    // เงินที่ออมไว้แล้วจะงอกเป็นเท่าไหร่ตอนเกษียณ
+    const monthlyRetRate = ret / 12;
+    const currentGrown = cur * Math.pow(1+monthlyRetRate, yearsToRetire*12);
+
+    // เงินที่ยังขาด
+    const shortfall = Math.max(0, totalNeeded - currentGrown);
+
+    // ต้องเก็บเดือนละเท่าไหร่ (FV of annuity)
+    const totalMonths = yearsToRetire * 12;
+    let monthlySave;
+    if(monthlyRetRate < 0.0001) {
+      monthlySave = shortfall / totalMonths;
+    } else {
+      monthlySave = shortfall * monthlyRetRate / (Math.pow(1+monthlyRetRate,totalMonths)-1);
+    }
+
+    // Projection: wealth path year by year
+    const path = [];
+    let wealth = cur;
+    for(let y=0; y<=yearsToRetire; y++){
+      path.push({year: new Date().getFullYear()+y, wealth: Math.round(wealth), phase:"save"});
+      wealth = (wealth + monthlySave*12) * (1+ret);
+    }
+    const wealthAtRetire = path[path.length-1].wealth;
+    for(let y=1; y<=yearsInRetire; y++){
+      const drawdown = expAtRetire * 12 * Math.pow(1+inf,y);
+      wealth = (wealth - drawdown) * (1+ret*0.5); // conservative in retirement
+      path.push({year: new Date().getFullYear()+yearsToRetire+y, wealth:Math.max(0,Math.round(wealth)), phase:"retire"});
+    }
+
+    setResult({
+      yearsToRetire, yearsInRetire,
+      expAtRetire, totalNeeded,
+      currentGrown, shortfall,
+      monthlySave: Math.max(0, monthlySave),
+      wealthAtRetire,
+      path,
+      onTrack: currentGrown >= totalNeeded,
+    });
+  };
+
+  const fmtM = n => {
+    if(n>=1000000000) return `${(n/1000000000).toFixed(1)} พันล.`;
+    if(n>=1000000)    return `${(n/1000000).toFixed(1)} ล.`;
+    if(n>=1000)       return `${(n/1000).toFixed(0)}K`;
+    return fmt(n);
+  };
+
+  const maxWealth = result ? Math.max(...result.path.map(p=>p.wealth),1) : 1;
+  const retireYear = new Date().getFullYear() + (parseInt(retAge)||55)-(parseInt(age)||30);
+
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet" style={{maxHeight:"94vh"}}>
+        <div className="sheet-pill"/>
+        <div className="rp-header">
+          <span style={{fontSize:28}}>💰</span>
+          <div>
+            <div className="rp-title">วางแผนเกษียณ</div>
+            <div className="rp-sub">คำนวณเงินที่ต้องเตรียมก่อนเกษียณ</div>
+          </div>
+        </div>
+
+        {/* Input grid */}
+        <div className="rp-section-label">ข้อมูลส่วนตัว</div>
+        <div className="rp-age-row">
+          {[
+            {label:"อายุปัจจุบัน",val:age,set:setAge,unit:"ปี",emoji:"🧑"},
+            {label:"อายุเกษียณ",val:retAge,set:setRetAge,unit:"ปี",emoji:"🏖️"},
+            {label:"อายุขัยที่คาด",val:lifeAge,set:setLifeAge,unit:"ปี",emoji:"👴"},
+          ].map(f=>(
+            <div className="rp-age-card" key={f.label}>
+              <div className="rp-age-emoji">{f.emoji}</div>
+              <div className="rp-age-label">{f.label}</div>
+              <input className="rp-age-inp" type="number" value={f.val}
+                onChange={e=>f.set(e.target.value)}/>
+              <div className="rp-age-unit">{f.unit}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rp-section-label" style={{marginTop:14}}>ค่าใช้จ่าย & ผลตอบแทน</div>
+        <div className="rp-inputs">
+          <div className="rp-inp-row">
+            <div className="rp-inp-label">💸 ค่าใช้จ่ายต่อเดือนตอนนี้</div>
+            <div className="rp-inp-field">
+              <input className="sinp" type="number" placeholder="เช่น 30000" value={expense}
+                onChange={e=>setExpense(e.target.value)} style={{marginBottom:0}}/>
+              <span className="rp-inp-unit">บาท/เดือน</span>
+            </div>
+          </div>
+          <div className="rp-inp-row">
+            <div className="rp-inp-label">🏦 เงินออมที่มีแล้วตอนนี้</div>
+            <div className="rp-inp-field">
+              <input className="sinp" type="number" placeholder="เช่น 500000" value={currentSavings}
+                onChange={e=>setCurSav(e.target.value)} style={{marginBottom:0}}/>
+              <span className="rp-inp-unit">บาท</span>
+            </div>
+          </div>
+          <div className="rp-rate-row">
+            <div className="rp-rate-card">
+              <div className="rp-rate-label">📈 เงินเฟ้อ</div>
+              <div className="rp-rate-inp-wrap">
+                <input className="rp-rate-inp" type="number" step="0.5" value={inflation}
+                  onChange={e=>setInflation(e.target.value)}/>
+                <span className="rp-rate-unit">%/ปี</span>
+              </div>
+            </div>
+            <div className="rp-rate-card">
+              <div className="rp-rate-label">💹 ผลตอบแทนออม</div>
+              <div className="rp-rate-inp-wrap">
+                <input className="rp-rate-inp" type="number" step="0.5" value={returnRate}
+                  onChange={e=>setReturn(e.target.value)}/>
+                <span className="rp-rate-unit">%/ปี</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button className="rp-calc-btn" onClick={calc}>คำนวณ →</button>
+
+        {result && (<>
+          {/* Key results */}
+          <div className={`rp-result-hero ${result.onTrack?"rp-safe":"rp-warn"}`}>
+            <div className="rp-hero-icon">{result.onTrack?"✅":"⚠️"}</div>
+            <div className="rp-hero-text">
+              <div className="rp-hero-title">{result.onTrack?"เงินพอเกษียณ!":"ต้องเพิ่มการออม"}</div>
+              <div className="rp-hero-sub">
+                {result.onTrack
+                  ? `เงินออมปัจจุบันเพียงพอแล้ว`
+                  : `ต้องออมเดือนละ ${fmt(Math.round(result.monthlySave))} บาท`}
+              </div>
+            </div>
+          </div>
+
+          <div className="rp-cards">
+            {[
+              {icon:"💸",label:"ค่าใช้จ่าย/เดือนตอนเกษียณ",val:`${fmt(Math.round(result.expAtRetire))} บาท`,sub:"ปรับเงินเฟ้อแล้ว"},
+              {icon:"🏦",label:"เงินที่ต้องมีตอนเกษียณ",val:`${fmtM(result.totalNeeded)} บาท`,sub:"เพื่อใช้จนสิ้นอายุขัย"},
+              {icon:"⏳",label:"เหลือเวลาเก็บเงิน",val:`${result.yearsToRetire} ปี`,sub:`เกษียณปี ${retireYear+543}`},
+              {icon:"💰",label:"ต้องออมเดือนละ",val:`${fmt(Math.round(result.monthlySave))} บาท`,sub:"ที่ผลตอบแทน "+returnRate+"%/ปี",highlight:true},
+            ].map(c=>(
+              <div key={c.label} className={`rp-card ${c.highlight?"rp-card-hl":""}`}>
+                <div className="rp-card-icon">{c.icon}</div>
+                <div className="rp-card-label">{c.label}</div>
+                <div className={`rp-card-val ${c.highlight?"rp-card-val-hl":""}`}>{c.val}</div>
+                <div className="rp-card-sub">{c.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Wealth Path Chart */}
+          <div className="rp-section-label" style={{marginTop:14}}>Wealth Path — เส้นทางความมั่งคั่ง</div>
+          <div className="rp-chart">
+            <div className="rp-chart-bars">
+              {result.path.filter((_,i)=>i%2===0).map((p,i)=>(
+                <div key={i} className="rp-bar-col">
+                  <div className="rp-bar-wrap">
+                    <div className={`rp-bar ${p.phase==="retire"?"rp-bar-retire":"rp-bar-save"}`}
+                      style={{height:`${Math.max(2,(p.wealth/maxWealth)*100)}%`}}/>
+                  </div>
+                  <div className="rp-bar-label">
+                    {p.year===retireYear&&<div className="rp-retire-marker">เกษียณ</div>}
+                    {i%4===0&&<span>{p.year-2500+2543}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rp-chart-legend">
+              <span><span className="rpc-dot save"/>ช่วงออมเงิน</span>
+              <span><span className="rpc-dot retire"/>ช่วงเกษียณ</span>
+            </div>
+            <div className="rp-chart-ymax">{fmtM(maxWealth)}</div>
+          </div>
+
+          {/* Scenarios */}
+          <div className="rp-section-label" style={{marginTop:14}}>สมมติสถานการณ์</div>
+          <div className="rp-scenarios">
+            {[
+              {label:"ผลตอบแทนต่ำ (4%)", rate:4, color:"#C04848"},
+              {label:"ปานกลาง (6%)", rate:6, color:"#E8B84B"},
+              {label:"สูง (8%)", rate:8, color:"#4A7C3F"},
+            ].map(s=>{
+              const r = s.rate/100; const rm = r/12;
+              const n = result.yearsToRetire*12;
+              const need = result.totalNeeded;
+              const cg = parseFloat(currentSavings||0)*Math.pow(1+rm,n);
+              const sf = Math.max(0,need-cg);
+              const ms = sf>0&&rm>0.0001 ? sf*rm/(Math.pow(1+rm,n)-1) : sf/n;
+              return (
+                <div key={s.label} className="rp-scenario-row">
+                  <span className="rps-dot" style={{background:s.color}}/>
+                  <span className="rps-label">{s.label}</span>
+                  <span className="rps-val" style={{color:s.color}}>เก็บเดือนละ {fmt(Math.round(ms))} ฿</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rp-note">* การคำนวณเป็นการประมาณการ ควรปรึกษาที่ปรึกษาการเงินสำหรับการวางแผนจริง</div>
+        </>)}
+
+        <button className="sbtn-c" style={{width:"100%",marginTop:12}} onClick={onClose}>ปิด</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Goals Tab ────────────────────────────────────────────────────────
+function GoalsTab({data,goals,setGoals,savings}) {
+  const [showAdd,setShowAdd]=useState(false);const [editGoal,setEditGoal]=useState(null);const [detailGoal,setDetailGoal]=useState(null);const [showRetirement,setShowRetirement]=useState(false);
+  const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const {tax}=calcPersonalTax(totalInc);const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
+  const totalGoalSaved=goals.reduce((s,g)=>s+g.saved,0);const netLeft=Math.max(0,totalInc-totalExp-tax-totalSaved-totalGoalSaved);
+  const saveGoal=g=>setGoals(prev=>{const ex=prev.find(x=>x.id===g.id);return ex?prev.map(x=>x.id===g.id?g:x):[...prev,g];});
+  const delGoal=id=>setGoals(prev=>prev.filter(g=>g.id!==id));
+  const doDeposit=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
+  const doDeleteDeposit=(goalId,depId)=>setGoals(prev=>prev.map(g=>{if(g.id!==goalId)return g;const dep=g.deposits?.find(d=>d.id===depId);const newSaved=Math.max(0,g.saved-(dep?.amount||0));return {...g,saved:newSaved,deposits:(g.deposits||[]).filter(d=>d.id!==depId)};}));
+  const moLeft=dl=>{if(!dl)return null;const [y,m]=dl.split("-").map(Number);const now=new Date();return Math.max(1,(y-now.getFullYear())*12+(m-now.getMonth()-1));};
+  return <div className="tab-content">
+    <div className="goals-snap">
+      <div className="gsnap-title">💡 ภาพรวมการเงินของคุณ</div>
+      <div className="gsnap-rows">
+        {[{label:"รายได้รวม",val:totalInc,color:"#4A7C3F",pre:"+"},{label:"ค่าใช้จ่าย",val:totalExp,color:"#C04848",pre:"−"},{label:"ภาษีประมาณ",val:tax,color:"#C04848",pre:"−"},{label:"ออม/ลงทุน",val:totalSaved,color:"#2E6DA4",pre:"−"},{label:"เป้าหมาย",val:totalGoalSaved,color:"#7A4FA0",pre:"−"}].map(r=><div className="gsnap-row" key={r.label}><span className="gsnap-label">{r.label}</span><div className="gsnap-bar-track"><div className="gsnap-bar-fill" style={{width:`${totalInc>0?Math.min((r.val/totalInc)*100,100):0}%`,background:r.color+"44"}}/></div><span className="gsnap-val" style={{color:r.color}}>{r.pre}{fmt(r.val)} ฿</span></div>)}
+        <div className="gsnap-divider"/>
+        <div className="gsnap-row gsnap-net"><span>เหลือใช้จริง</span><div className="gsnap-bar-track"><div className="gsnap-bar-fill" style={{width:`${totalInc>0?Math.min((netLeft/totalInc)*100,100):0}%`,background:"#E8B84B"}}/></div><span style={{color:"#B8860B",fontWeight:800}}>{fmt(netLeft)} ฿</span></div>
+      </div>
+    </div>
+    {/* Retirement banner */}
+    <div className="retirement-banner" onClick={()=>setShowRetirement(true)}>
+      <div className="rb-glow"/>
+      <div className="rb-left">
+        <div className="rb-icon-wrap">
+          <span className="rb-icon">💰</span>
+        </div>
+        <div>
+          <div className="rb-eyebrow">แผนการเงิน</div>
+          <div className="rb-title">วางแผนเกษียณ</div>
+          <div className="rb-sub">คำนวณว่าต้องเก็บเดือนละเท่าไหร่ เพื่อเกษียณสบาย</div>
+        </div>
+      </div>
+      <div className="rb-cta">
+        <span className="rb-cta-text">แตะเพื่อคำนวณ</span>
+        <span className="rb-arr">→</span>
+      </div>
+    </div>
+    <div className="sec-hd"><span>🌟 ความฝัน & เป้าหมาย</span><button className="sec-add" onClick={()=>setShowAdd(true)}>+ เพิ่ม</button></div>
+    {goals.length===0?<div className="goals-empty" onClick={()=>setShowAdd(true)}><div style={{fontSize:40,marginBottom:10}}>🌟</div><div style={{fontWeight:700,color:"#2C2510",marginBottom:4}}>ยังไม่มีเป้าหมาย</div><div style={{fontSize:13,color:"#A89660"}}>แตะเพื่อเพิ่มความฝันแรกของคุณ</div></div>:
+    <div className="goals-list">{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);const mo=moLeft(g.deadline);const need=mo?Math.ceil((g.target-g.saved)/mo):0;const done=pct>=100;return <div className="goal-card" key={g.id} style={{borderColor:done?"#6ABF6A":"#EDE8D8"}}>
+      {done&&<div className="goal-done-badge">🎉 สำเร็จแล้ว!</div>}
+      <div className="goal-top"><div className="goal-emoji-wrap">{g.emoji}</div><div className="goal-meta"><div className="goal-name">{g.name}</div>{g.deadline&&<div className="goal-deadline">🗓 {g.deadline.replace("-","/")} {mo?`· เหลือ ${mo} เดือน`:""}</div>}</div><div className="goal-actions"><button className="goal-act-btn" onClick={()=>setEditGoal(g)}>✏️</button><button className="goal-act-btn" onClick={()=>delGoal(g.id)}>🗑</button></div></div>
+      <div className="goal-prog-wrap"><div className="goal-prog-track"><div className="goal-prog-fill" style={{width:`${pct}%`,background:done?"#6ABF6A":"#E8B84B"}}/></div><div className="goal-prog-nums"><span style={{color:done?"#4A7C3F":"#B8860B",fontWeight:700}}>{fmt(g.saved)} ฿</span><span style={{color:"#A89660"}}>{Math.round(pct)}%</span><span style={{color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div>
+      {!done&&mo&&need>0&&<div className="goal-hint">ต้องเก็บเดือนละ <strong>{fmt(need)} บาท</strong> เพื่อให้ถึงเป้า</div>}
+      {/* Monthly mini-timeline preview */}
+      <div className="goal-mo-preview">
+        {MONTHS_TH.map((mo,mi)=>{
+          const deps=(g.deposits||[]).filter(d=>d.monthIdx===mi);
+          const moTotal=deps.reduce((s,d)=>s+d.amount,0);
+          const mNeed=g.deadline?(()=>{const [y,mm]=g.deadline.split("-").map(Number);const now=new Date();const rem=Math.max(1,(y-now.getFullYear())*12+(mm-now.getMonth()-1));return Math.ceil((g.target-g.saved)/rem);})():0;
+          const ok=moTotal>=mNeed&&mNeed>0;
+          const has=moTotal>0;
+          return <div key={mi} className="goal-mo-dot-wrap" title={`${mo}: ${has?fmt(moTotal)+" ฿":"ยังไม่มี"}`}>
+            <div className={`goal-mo-dot-cell ${has?(ok?"gmc-ok":"gmc-partial"):"gmc-empty"}`}/>
+            <div className="goal-mo-dot-lbl">{mo}</div>
+          </div>;
+        })}
+      </div>
+      <button className="goal-deposit-btn" onClick={()=>setDetailGoal(g)}>
+        {(g.deposits||[]).length>0?"📅 ดูและแก้ไขรายเดือน →":"+ เพิ่มยอดที่ออมได้"}
+      </button>
+    </div>;})}
+    </div>}
+    {(showAdd||editGoal)&&<GoalSheet existing={editGoal} onSave={saveGoal} onClose={()=>{setShowAdd(false);setEditGoal(null);}}/>}
+    {showRetirement&&<RetirementPlanner onClose={()=>setShowRetirement(false)}/>}
+    {detailGoal&&<GoalDetailSheet goal={detailGoal} onDeposit={(gid,dep)=>{doDeposit(gid,dep);setDetailGoal(prev=>({...prev,saved:prev.saved+dep.amount,deposits:[...(prev.deposits||[]),dep]}));}} onDeleteDeposit={(gid,did)=>{doDeleteDeposit(gid,did);setDetailGoal(prev=>{const d=prev.deposits?.find(x=>x.id===did);return {...prev,saved:Math.max(0,prev.saved-(d?.amount||0)),deposits:(prev.deposits||[]).filter(x=>x.id!==did)};});}} onClose={()=>setDetailGoal(null)}/>}
+  </div>;
+}
+
+// ── Summary Tab ──────────────────────────────────────────────────────
+function SummaryTab({data,goals,savings}) {
+  const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const {taxable,tax}=calcPersonalTax(totalInc);const net=totalInc-totalExp-tax;
+  const maxInc=Math.max(...data.map(d=>d.income),1);
+  const catMap={};data.forEach(m=>m.expenses.forEach(e=>{const k=e.cat||"อื่นๆ";catMap[k]=(catMap[k]||0)+e.amount;}));
+  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
+  return <div className="tab-content">
+    <div className="sum-hero">
+      <div className="sh-eye">ภาพรวมปี {YEAR_TH}</div>
+      <div className="sh-big">{fmt(totalInc)}<span className="sh-unit"> บาท</span></div>
+      <div className="sh-divider"/>
+      <div className="sh-rows">
+        <div className="sh-row"><span>ค่าใช้จ่ายรวม</span><span className="shr-neg">−{fmt(totalExp)} ฿</span></div>
+        <div className="sh-row"><span>ภาษีประมาณ</span><span className="shr-neg">−{fmt(tax)} ฿</span></div>
+        <div className="sh-row"><span>ออม/ลงทุน</span><span style={{color:"#90D080",fontWeight:700}}>−{fmt(totalSaved)} ฿</span></div>
+        <div className="sh-row sh-bold"><span>เงินคงเหลือจริง</span><span style={{color:"#FFF3C4"}}>{fmt(Math.max(0,net-totalSaved))} ฿</span></div>
+      </div>
+    </div>
+    <div className={`tax-res ${tax===0?"tr-safe":"tr-warn"}`}><div className="tr-label">ภาษีที่ต้องจ่ายปีนี้</div><div className="tr-val">{tax===0?"ไม่ต้องจ่าย 🎉":`${fmt(tax)} บาท`}</div><div className="tr-note">{tax===0?"แต่ยังต้องยื่นแบบถ้ารายได้ > 60,000 บ./ปี":"ยื่นออนไลน์ที่ efiling.rd.go.th ภายในมีนาคม"}</div></div>
+    <div className="sec-hd2">รายได้รายเดือน</div>
+    <div className="mo-bars">{data.map((d,i)=>{const t=d.income;const pct=(t/maxInc)*100;return <div className="mob-row" key={i}><div className="mob-label">{MONTHS_TH[i]}</div><div className="mob-track"><div className="mob-inc" style={{width:`${pct}%`}}/><div className="mob-exp" style={{width:`${Math.min((d.expenses.reduce((s,e)=>s+e.amount,0)/Math.max(t,1))*100,100)}%`}}/></div><div className="mob-val">{t>0?`${fmtK(t)} ฿`:"—"}</div></div>;})}</div>
+    {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
+    {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
+    <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
+  </div>;
+}
+
+// ── Root App ─────────────────────────────────────────────────────────
+const TABS=[{key:"learn",icon:"💡",label:"เรียนรู้"},{key:"money",icon:"💰",label:"การเงิน"},{key:"plan",icon:"🌱",label:"วางแผน"},{key:"goals",icon:"🌟",label:"ความฝัน"},{key:"summary",icon:"📊",label:"สรุปปี"}];
+
+export default function App() {
+  const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [tab,setTab]=useState("learn");
+  const [data,setData]=useState(initData());const [goals,setGoals]=useState([]);const [savings,setSavings]=useState({});
+  const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
+  if(screen==="onboard")return <Shell><Onboarding onDone={()=>setScreen("login")}/></Shell>;
+  if(screen==="login")  return <Shell><Login onLogin={u=>{setUser(u);setScreen("app");}}/></Shell>;
+  return <div className="app">
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body,html{font-family:'Sarabun',sans-serif;background:#FFFDF5;}
+      .app{max-width:430px;margin:0 auto;min-height:100vh;background:#FFFDF5;display:flex;flex-direction:column;padding-bottom:72px;}
+      .hdr{background:#FFFDF5;border-bottom:1.5px solid #EDE8D8;padding:14px 18px 0;position:sticky;top:0;z-index:30;}
+      .hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+      .hdr-brand{display:flex;align-items:center;gap:8px;}
+      .hdr-icon{width:32px;height:32px;background:#E8B84B;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;}
+      .hdr-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#2C2510;}
+      .hdr-user{font-size:10px;color:#A89660;margin-top:1px;}
+      .hdr-right{display:flex;align-items:center;gap:8px;}
+      .hdr-year{font-size:10px;color:#A89660;font-weight:600;}
+      .hdr-out{background:#F5EFE0;border:1.5px solid #EDE8D8;color:#A89660;width:26px;height:26px;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+      .hdr-tabs{display:flex;}
+      .htab{flex:1;padding:9px 0 8px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:10px;font-weight:700;color:#C4B88A;border-bottom:2.5px solid transparent;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:2px;}
+      .htab.on{color:#2C2510;border-bottom-color:#E8B84B;}
+      .htab-icon{font-size:15px;}
+      .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#FFFDF5;border-top:1.5px solid #EDE8D8;display:grid;grid-template-columns:repeat(5,1fr);z-index:40;}
+      .bnav-btn{padding:8px 0 12px;border:none;background:none;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;color:#C4B88A;transition:color .2s;}
+      .bnav-btn.on{color:#2C2510;}
+      .bnav-icon{font-size:17px;}
+      .bnav-lbl{font-size:9px;font-weight:700;}
+      .bnav-pip{width:14px;height:3px;border-radius:2px;background:#E8B84B;opacity:0;margin-top:1px;transition:opacity .2s;}
+      .bnav-btn.on .bnav-pip{opacity:1;}
+      .tab-content{padding:14px 16px 8px;}
+      /* Learn */
+      .learn-hero{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:20px;margin-bottom:14px;color:#FFF3C4;}
+      .lh-badge{display:inline-block;background:#E8B84B33;color:#E8B84B;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
+      .lh-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;line-height:1.3;margin-bottom:6px;}
+      .lh-sub{font-size:13px;color:#A89660;}
+      .faq-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+      .faq-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:14px;padding:13px;cursor:pointer;}
+      .faq-open{border-color:#E8B84B;background:#FFFDF5;}
+      .faq-row{display:flex;align-items:flex-start;gap:9px;}
+      .faq-tag{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+      .faq-q{flex:1;font-size:13px;font-weight:700;color:#2C2510;line-height:1.4;}
+      .faq-chev{color:#C4B88A;font-size:10px;flex-shrink:0;margin-top:3px;}
+      .faq-a{margin-top:10px;font-size:13px;color:#6B5E3C;line-height:1.75;padding-top:10px;border-top:1px solid #EDE8D8;}
+      /* Tax toggle */
+      .tax-toggle{display:flex;gap:8px;margin-bottom:12px;}
+      .ttbtn{flex:1;display:flex;align-items:center;gap:8px;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:12px;padding:10px 11px;cursor:pointer;font-family:'Sarabun',sans-serif;text-align:left;transition:all .2s;}
+      .ttbtn-on{border-color:#E8B84B;background:#FFF8DC;}
+      .ttbtn-corp{border-color:#7A4FA0!important;background:#F5F0FF!important;}
+      .ttbtn-lbl{font-size:12px;font-weight:800;color:#2C2510;}
+      .ttbtn-sub{font-size:9px;color:#A89660;margin-top:1px;}
+      .corp-tip{background:#F5F0FF;border:1.5px solid #C4AAFF;border-radius:10px;padding:10px 12px;font-size:12px;color:#6A4FA0;margin-bottom:12px;line-height:1.6;}
+      .learn-calc{background:#FFF;border:1.5px solid #EDE8D8;border-radius:18px;padding:16px;margin-bottom:14px;}
+      .lc-title{font-size:14px;font-weight:800;color:#2C2510;margin-bottom:3px;}
+      .lc-sub{font-size:12px;color:#A89660;margin-bottom:10px;}
+      .lc-row{display:flex;gap:8px;margin-bottom:10px;}
+      .lc-inp{flex:1;padding:10px 12px;border:1.5px solid #EDE8D8;border-radius:10px;font-size:14px;font-family:'Sarabun',sans-serif;outline:none;background:#FFFDF5;color:#2C2510;}
+      .lc-inp:focus{border-color:#E8B84B;}
+      .lc-btn{background:#2C2510;color:#FFF3C4;border:none;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
+      .lc-result{border:1.5px solid #EDE8D8;border-radius:12px;overflow:hidden;}
+      .lcr-row{display:flex;justify-content:space-between;padding:9px 13px;font-size:13px;border-bottom:1px solid #F5EFE0;color:#6B5E3C;}
+      .lcr-v{font-weight:700;color:#2C2510;}
+      .lcr-v.neg{color:#C04848;}
+      .lcr-row.base{background:#FFF8DC;font-weight:700;}
+      .lcr-tax{padding:14px;text-align:center;}
+      .lct-safe{background:#F0FFF4;}
+      .lct-warn{background:#FFF5F0;}
+      .lct-label{font-size:11px;font-weight:800;color:#A89660;margin-bottom:4px;}
+      .lct-val{font-size:20px;font-weight:800;color:#2C2510;}
+      .lct-mo{font-size:11px;color:#A89660;margin-top:4px;}
+      .rate-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:14px;padding:14px;margin-bottom:14px;}
+      .rate-title{font-size:13px;font-weight:800;color:#2C2510;margin-bottom:10px;}
+      .rate-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F5EFE0;font-size:12px;color:#6B5E3C;}
+      .rate-row:last-child{border:none;}
+      .rate-pct{font-weight:800;}
+      .rate-note{font-size:11px;color:#A89660;padding:8px 0 2px;line-height:1.6;}
+      /* Money tab */
+      .month-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:12px;scrollbar-width:none;}
+      .month-scroll::-webkit-scrollbar{display:none;}
+      .mo-chip{flex-shrink:0;padding:6px 11px;border-radius:20px;border:1.5px solid #EDE8D8;background:#FFFDF5;color:#A89660;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;position:relative;transition:all .2s;}
+      .mo-on{background:#2C2510;color:#FFF3C4;border-color:#2C2510;}
+      .mo-dot{position:absolute;top:4px;right:4px;width:5px;height:5px;background:#E8B84B;border-radius:50%;}
+      .money-hero{background:#2C2510;border-radius:16px;padding:16px;margin-bottom:14px;color:#FFF3C4;}
+      .mh-month{font-size:11px;color:#A89660;margin-bottom:10px;font-weight:600;}
+      .mh-cols{display:flex;align-items:center;}
+      .mhc{flex:1;text-align:center;}
+      .mhc-label{font-size:10px;color:#A89660;font-weight:600;margin-bottom:3px;}
+      .mhc-val{font-size:17px;font-weight:800;}
+      .mhc-val.inc{color:#90D080;}
+      .mhc-val.exp{color:#FF9090;}
+      .mhc-unit{font-size:11px;font-weight:600;}
+      .mhc-sep{width:1px;height:32px;background:#4A3E22;}
+      .flow-bar-wrap{margin-top:12px;padding-top:12px;border-top:1px solid #4A3E22;}
+      .flow-bar{height:6px;background:#4A3E22;border-radius:3px;overflow:hidden;display:flex;margin-bottom:6px;}
+      .flow-seg{height:100%;}
+      .flow-exp{background:#FF9090;}
+      .flow-tax{background:#FFD060;}
+      .flow-legend{display:flex;gap:12px;font-size:10px;color:#A89660;}
+      .fleg{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;vertical-align:middle;}
+      .fleg.exp{background:#FF9090;}
+      .fleg.tax{background:#FFD060;}
+      .sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+      .sec-hd span{font-size:13px;font-weight:800;color:#2C2510;}
+      .sec-add{background:#FFF3C4;border:1.5px solid #E8B84B;color:#B8860B;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:'Sarabun',sans-serif;}
+      .empty-card{background:#FFF;border:1.5px dashed #D4C99A;border-radius:12px;padding:14px;text-align:center;font-size:13px;color:#C4B88A;cursor:pointer;margin-bottom:10px;font-weight:600;}
+      .income-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:12px;padding:13px;display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+      .ic-emoji{font-size:26px;}
+      .ic-label{font-size:11px;color:#A89660;font-weight:600;}
+      .ic-amt{font-size:17px;font-weight:800;color:#2C2510;}
+      .exp-row{background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:11px;display:flex;align-items:center;gap:9px;margin-bottom:7px;}
+      .exp-cat-ico{font-size:20px;flex-shrink:0;}
+      .exp-info{flex:1;}
+      .exp-name{font-size:13px;font-weight:600;color:#2C2510;}
+      .exp-cat{font-size:11px;color:#A89660;margin-top:1px;}
+      .exp-amt{font-size:13px;font-weight:800;color:#C04848;white-space:nowrap;}
+      .del-btn{background:#F5EFE0;border:none;color:#C4B88A;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .exp-total{text-align:right;font-size:12px;color:#A89660;margin-bottom:10px;}
+      .net-card{border-radius:14px;padding:14px;margin-bottom:14px;text-align:center;}
+      .net-pos{background:#F0FFF4;border:1.5px solid #B8D89A;}
+      .net-neg{background:#FFF0F0;border:1.5px solid #F0AAAA;}
+      .net-label{font-size:12px;font-weight:700;color:#6B5E3C;margin-bottom:5px;}
+      .net-val{font-size:24px;font-weight:800;color:#2C2510;}
+      .net-hint{font-size:12px;color:#A89660;margin-top:5px;}
+      /* Sheet */
+      .overlay{position:fixed;inset:0;background:rgba(44,37,16,.5);z-index:50;display:flex;flex-direction:column;justify-content:flex-end;backdrop-filter:blur(3px);}
+      .sheet{background:#FFFDF5;border-radius:24px 24px 0 0;padding:18px 18px 32px;max-height:82vh;overflow-y:auto;}
+      .sheet-pill{width:36px;height:4px;background:#EDE8D8;border-radius:2px;margin:0 auto 12px;}
+      .sheet-ttl{font-size:17px;font-weight:800;color:#2C2510;margin-bottom:12px;}
+      .cat-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;margin-bottom:8px;}
+      .cat-scroll::-webkit-scrollbar{display:none;}
+      .cat-chip{flex-shrink:0;padding:6px 11px;border-radius:20px;border:1.5px solid #EDE8D8;background:#FFFDF5;color:#A89660;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
+      .cat-on{background:#2C2510;color:#FFF3C4;border-color:#2C2510;}
+      .sinp{width:100%;padding:11px 13px;border:1.5px solid #EDE8D8;border-radius:10px;font-size:14px;font-family:'Sarabun',sans-serif;outline:none;background:#FFF;color:#2C2510;margin-bottom:9px;display:block;}
+      .sinp:focus{border-color:#E8B84B;}
+      .sinp-lg{font-size:17px;font-weight:700;}
+      .sheet-btns{display:flex;gap:8px;}
+      .sbtn-c{background:#F5EFE0;color:#A89660;border:none;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
+      .sbtn-s{flex:1;background:#2C2510;color:#FFF3C4;border:none;padding:12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
+      /* Plan */
+      .plan-hero{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:20px;margin-bottom:14px;color:#FFF3C4;}
+      .ph-label{font-size:11px;color:#A89660;margin-bottom:5px;font-weight:600;}
+      .ph-val{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:#FFF3C4;margin-bottom:12px;}
+      .ph-unit{font-size:16px;}
+      .ph-rows{display:flex;flex-direction:column;gap:0;}
+      .ph-row{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid #4A3E22;font-size:12px;color:#A89660;}
+      .ph-row-bold{color:#FFF3C4;font-weight:700;}
+      .phv-inc{color:#90D080;font-weight:700;}
+      .phv-exp{color:#FF9090;font-weight:700;}
+      .rule-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:16px;padding:14px;margin-bottom:14px;}
+      .rule-title{font-size:13px;font-weight:800;color:#2C2510;margin-bottom:10px;}
+      .rule-rows{display:flex;flex-direction:column;gap:9px;}
+      .rule-row{display:flex;flex-direction:column;gap:4px;}
+      .rule-bar-wrap{height:5px;background:#F5EFE0;border-radius:3px;overflow:hidden;}
+      .rule-bar-fill{height:100%;border-radius:3px;}
+      .rule-info{display:flex;align-items:center;gap:7px;}
+      .rule-pct{font-size:13px;font-weight:800;width:34px;}
+      .rule-label{flex:1;font-size:13px;font-weight:700;color:#2C2510;}
+      .rule-amt{font-size:12px;font-weight:700;color:#2C2510;}
+      .rule-desc{font-size:10px;color:#A89660;padding-left:41px;}
+      .savings-bar-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:14px;padding:12px;margin-bottom:12px;}
+      .sbc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+      .sbc-label{font-size:12px;font-weight:700;color:#2C2510;}
+      .sbc-total{font-size:15px;font-weight:800;color:#2C2510;}
+      .sbc-track{height:10px;background:#F5EFE0;border-radius:5px;overflow:hidden;display:flex;margin-bottom:8px;}
+      .sbc-seg{height:100%;}
+      .invest-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+      .invest-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:14px;padding:13px;display:flex;align-items:center;justify-content:space-between;}
+      .inv-tappable{cursor:pointer;transition:all .15s;}
+      .inv-tappable:active{transform:scale(.97);}
+      .inv-left{display:flex;align-items:center;gap:10px;flex:1;}
+      .inv-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+      .inv-label{font-size:13px;font-weight:700;color:#2C2510;}
+      .inv-desc{font-size:11px;color:#A89660;margin-top:1px;}
+      .inv-this-month{font-size:11px;font-weight:700;margin-top:3px;}
+      .inv-right{text-align:right;flex-shrink:0;}
+      .inv-total-val{font-size:15px;font-weight:800;}
+      .inv-total-label{font-size:10px;color:#A89660;text-align:right;margin-top:2px;}
+      .inv-tap-hint{font-size:11px;font-weight:700;}
+      .invest-note{font-size:11px;color:#A89660;margin-bottom:14px;text-align:center;}
+      /* InvestSheet */
+      ter;font-size:21px;flex-shrink:0;}
+      .inv-sh-title{font-size:15px;font-weight:800;color:#2C2510;}
+      .inv-sh-desc{font-size:11px;color:#A89660;margin-top:2px;}
+      .ish-sec-label{font-size:10px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;display:block;}
+      .ish-months{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+      .ish-mo{padding:5px 10px;border-radius:20px;border:1.5px solid #EDE8D8;background:#FFFDF5;color:#A89660;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;position:relative;transition:all .15s;}
+      .ish-mo-on{color:#FFF;}
+      .ish-mo-dot{position:absolute;top:2px;right:2px;width:5px;height:5px;background:#E8B84B;border-radius:50%;}
+      .ish-records{display:flex;flex-direction:column;gap:7px;margin-bottom:12px;}
+      .ish-rec{display:flex;align-items:center;gap:8px;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:10px;padding:9px 11px;}
+      .ish-rec-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+      .ish-rec-info{flex:1;}
+      .ish-rec-note{font-size:12px;font-weight:600;color:#2C2510;}
+      .ish-rec-date{font-size:10px;color:#A89660;}
+      .ish-rec-amt{font-size:12px;font-weight:800;white-space:nowrap;}
+      .ish-rec-goal-tag{font-size:10px;margin-left:4px;}
+      .ish-month-total{text-align:right;font-size:11px;color:#A89660;padding-right:2px;}
+      .ish-empty{text-align:center;padding:14px;color:#C4B88A;font-size:12px;background:#FFFDF5;border:1.5px dashed #EDE8D8;border-radius:10px;margin-bottom:12px;}
+      .ish-goal-link{background:#FFF8DC;border:1.5px solid #E8B84B44;border-radius:11px;padding:11px;margin-bottom:10px;}
+      .ish-goal-label{font-size:11px;font-weight:800;color:#B8860B;margin-bottom:7px;}
+      .ish-goal-opts{display:flex;flex-wrap:wrap;gap:6px;}
+      .ish-goal-btn{padding:5px 11px;border-radius:20px;border:1.5px solid #EDE8D8;background:#FFF;color:#A89660;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;transition:all .15s;}
+      .ish-goal-on{border-color:#E8B84B!important;background:#FFF3C4!important;color:#B8860B!important;}
+      .ish-form{display:flex;flex-direction:column;}
+      .ish-amt-row{display:flex;gap:8px;}
+      .ish-save-btn{color:#FFF;border:none;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;white-space:nowrap;}
+      /* Goals tab */
+      .goals-snap{background:linear-gradient(135deg,#2C2510,#4A3E22);border-radius:18px;padding:18px;margin-bottom:14px;}
+      .gsnap-title{font-size:13px;font-weight:800;color:#FFF3C4;margin-bottom:10px;}
+      .gsnap-rows{display:flex;flex-direction:column;gap:5px;}
+      .gsnap-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#A89660;}
+      .gsnap-label{width:70px;flex-shrink:0;font-weight:600;}
+      .gsnap-bar-track{flex:1;height:5px;background:#4A3E2266;border-radius:3px;overflow:hidden;}
+      .gsnap-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+      .gsnap-val{width:88px;text-align:right;font-weight:700;flex-shrink:0;font-size:11px;}
+      .gsnap-divider{border-top:1px solid #4A3E22;margin:4px 0;}
+      .gsnap-net{color:#FFF3C4;font-weight:800;font-size:13px;}
+      .goals-empty{background:#FFF;border:1.5px dashed #D4C99A;border-radius:18px;padding:30px;text-align:center;cursor:pointer;margin-bottom:14px;}
+      .goals-list{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;}
+      .goal-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:18px;padding:14px;position:relative;overflow:hidden;}
+      .goal-done-badge{position:absolute;top:10px;right:10px;background:#E8F5E0;color:#4A7C3F;font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;}
+      .goal-top{display:flex;align-items:flex-start;gap:11px;margin-bottom:11px;}
+      .goal-emoji-wrap{font-size:30px;flex-shrink:0;line-height:1;}
+      .goal-meta{flex:1;}
+      .goal-name{font-size:15px;font-weight:800;color:#2C2510;margin-bottom:2px;}
+      .goal-deadline{font-size:11px;color:#A89660;}
+      .goal-actions{display:flex;gap:5px;flex-shrink:0;}
+      .goal-act-btn{background:#F5EFE0;border:none;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+      .goal-prog-wrap{margin-bottom:9px;}
+      .goal-prog-track{height:9px;background:#F5EFE0;border-radius:5px;overflow:hidden;margin-bottom:5px;}
+      .goal-prog-fill{height:100%;border-radius:5px;transition:width .6s ease;}
+      .goal-prog-nums{display:flex;justify-content:space-between;font-size:11px;}
+      .goal-hint{font-size:11px;color:#A89660;margin-bottom:9px;background:#FFF8DC;border-radius:8px;padding:7px 10px;}
+      .goal-dep{display:flex;align-items:center;gap:6px;font-size:11px;color:#6B5E3C;margin-bottom:4px;}
+      .goal-dep-dot{width:6px;height:6px;border-radius:50%;background:#E8B84B;flex-shrink:0;}
+      .goal-dep-note{flex:1;}
+      .goal-dep-amt{color:#4A7C3F;font-weight:700;}
+      .goal-dep-date{color:#C4B88A;}
+      .goal-deposit-btn{width:100%;background:#FFF3C4;border:1.5px solid #E8B84B;color:#B8860B;border-radius:10px;padding:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;margin-top:7px;}
+      /* Goal monthly mini-preview on card */
+      .goal-mo-preview{display:flex;gap:3px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+      .goal-mo-preview::-webkit-scrollbar{display:none;}
+      .goal-mo-dot-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;}
+      .goal-mo-dot-cell{width:18px;height:18px;border-radius:5px;background:#F5EFE0;}
+      .gmc-ok{background:#6ABF6A;}
+      .gmc-partial{background:#E8B84B;}
+      .gmc-empty{background:#F5EFE0;border:1px dashed #EDE8D8;}
+      .goal-mo-dot-lbl{font-size:7px;color:#C4B88A;font-weight:700;}
+      /* GoalDetailSheet */
+      .gd-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+      .gd-emoji{font-size:36px;flex-shrink:0;}
+      .gd-meta{flex:1;}
+      .gd-name{font-size:17px;font-weight:800;color:#2C2510;}
+      .gd-dl{font-size:12px;color:#A89660;margin-top:2px;}
+      .gd-prog-card{background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:14px;padding:14px;margin-bottom:16px;}
+      .gd-prog-nums{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+      .gd-saved{font-size:18px;font-weight:800;color:#E8B84B;}
+      .gd-pct{font-size:13px;color:#A89660;font-weight:700;}
+      .gd-target{font-size:14px;font-weight:800;color:#2C2510;}
+      .gd-prog-track{height:10px;background:#F5EFE0;border-radius:5px;overflow:hidden;margin-bottom:8px;}
+      .gd-prog-fill{height:100%;border-radius:5px;transition:width .5s ease;}
+      .gd-hint{font-size:12px;color:#A89660;text-align:center;}
+      /* Monthly timeline */
+      .gd-timeline{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+      .gd-mo-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:11px;border:1.5px solid #EDE8D8;background:#FFF;cursor:pointer;transition:all .15s;}
+      .gd-mo-sel{border-color:#E8B84B;background:#FFF8DC;}
+      .gd-mo-left{display:flex;align-items:center;gap:7px;width:58px;flex-shrink:0;}
+      .gd-mo-badge{width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;}
+      .gd-mo-ok{background:#6ABF6A;color:#FFF;}
+      .gd-mo-partial{background:#E8B84B;color:#2C2510;}
+      .gd-mo-empty{background:#F5EFE0;color:#C4B88A;}
+      .gd-mo-name{font-size:12px;font-weight:700;color:#2C2510;}
+      .gd-mo-mid{flex:1;}
+      .gd-mo-bar-track{height:6px;background:#F5EFE0;border-radius:3px;overflow:hidden;}
+      .gd-mo-bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+      .gd-mo-right{width:80px;text-align:right;flex-shrink:0;}
+      .gd-mo-amt{font-size:12px;font-weight:800;color:#2C2510;}
+      .gd-mo-amt-ok{color:#4A7C3F;}
+      .gd-mo-add-hint{font-size:10px;color:#C4B88A;}
+      /* Deposit list */
+      .gd-dep-list{background:#FFFDF5;border-radius:12px;border:1.5px solid #EDE8D8;padding:11px;margin-bottom:12px;}
+      .gd-dep-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+      .gd-dep-row:last-child{margin-bottom:0;}
+      .gd-dep-dot{width:6px;height:6px;border-radius:50%;background:#E8B84B;flex-shrink:0;}
+      .gd-dep-info{flex:1;}
+      .gd-dep-note{font-size:12px;font-weight:600;color:#2C2510;}
+      .gd-dep-date{font-size:10px;color:#A89660;}
+      .gd-dep-amt{font-size:12px;font-weight:800;color:#4A7C3F;white-space:nowrap;}
+      /* Add form */
+      .gd-add-form{background:#FFF8DC;border:1.5px solid #E8B84B44;border-radius:12px;padding:12px;margin-bottom:10px;}
+      .gd-add-title{font-size:12px;font-weight:700;color:#2C2510;margin-bottom:10px;}
+      .gs-emoji-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
+      .gs-emoji-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 5px;border-radius:12px;border:1.5px solid #EDE8D8;background:#FFFDF5;cursor:pointer;font-family:'Sarabun',sans-serif;min-width:56px;transition:all .15s;}
+      .gs-emoji-on{border-color:#E8B84B;background:#FFF3C4;}
+      .gs-emoji-label{font-size:9px;color:#A89660;font-weight:700;text-align:center;}
+      .gs-calc-hint{display:flex;justify-content:space-between;align-items:center;background:#FFF8DC;border:1.5px solid #E8B84B44;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#6B5E3C;}
+      .gs-calc-amt{font-size:15px;font-weight:800;color:#B8860B;}
+      /* Summary */
+      .sum-hero{background:#2C2510;border-radius:18px;padding:20px;margin-bottom:12px;color:#FFF3C4;}
+      .sh-eye{font-size:11px;color:#A89660;margin-bottom:6px;font-weight:600;}
+      .sh-big{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;margin-bottom:12px;}
+      .sh-unit{font-size:17px;}
+      .sh-divider{border-top:1px solid #4A3E22;margin-bottom:8px;}
+      .sh-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;color:#A89660;}
+      .sh-bold{color:#FFF3C4;font-weight:700;}
+      .shr-neg{color:#FF9090;font-weight:700;}
+      .tax-res{border-radius:14px;padding:14px;margin-bottom:12px;text-align:center;}
+      .tr-safe{background:#F0FFF4;border:1.5px solid #B8D89A;}
+      .tr-warn{background:#FFF5F0;border:1.5px solid #F0AAAA;}
+      .tr-label{font-size:11px;font-weight:800;color:#A89660;margin-bottom:4px;}
+      .tr-val{font-size:22px;font-weight:800;color:#2C2510;margin-bottom:4px;}
+      .tr-note{font-size:11px;color:#A89660;line-height:1.5;}
+      .sec-hd2{font-size:10px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px;}
+      .mo-bars{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+      .mob-row{display:flex;align-items:center;gap:8px;}
+      .mob-label{font-size:10px;font-weight:700;color:#A89660;width:26px;flex-shrink:0;}
+      .mob-track{flex:1;height:7px;background:#F5EFE0;border-radius:4px;overflow:hidden;position:relative;}
+      .mob-inc{position:absolute;top:0;left:0;height:100%;background:#E8B84B;border-radius:4px;}
+      .mob-exp{position:absolute;top:0;left:0;height:100%;background:#FF909044;border-radius:4px;}
+      .mob-val{font-size:10px;font-weight:700;color:#2C2510;width:50px;text-align:right;flex-shrink:0;}
+      .cat-breakdown{display:flex;flex-direction:column;gap:7px;margin-bottom:12px;}
+      .cb-row{background:#FFF;border:1.5px solid #EDE8D8;border-radius:10px;padding:10px;display:flex;align-items:center;gap:9px;}
+      .cb-icon{font-size:18px;flex-shrink:0;}
+      .cb-info{flex:1;}
+      .cb-name{font-size:12px;font-weight:700;color:#2C2510;margin-bottom:3px;}
+      .cb-bar-wrap{height:4px;background:#F5EFE0;border-radius:2px;overflow:hidden;}
+      .cb-bar{height:100%;background:#E8B84B;border-radius:2px;}
+      .cb-amt{font-size:11px;font-weight:700;color:#2C2510;white-space:nowrap;}
+      .sum-goal-row{display:flex;align-items:flex-start;gap:9px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:11px;margin-bottom:7px;}
+      .efiling-cta{display:flex;align-items:center;justify-content:space-between;background:#E8B84B;border-radius:14px;padding:15px 18px;margin-bottom:14px;cursor:pointer;}
+      /* RetirementPlanner */
+      .rp-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+      .rp-title{font-size:17px;font-weight:800;color:#2C2510;}
+      .rp-sub{font-size:12px;color:#A89660;margin-top:2px;}
+      .rp-section-label{font-size:10px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;}
+      .rp-age-row{display:flex;gap:8px;margin-bottom:4px;}
+      .rp-age-card{flex:1;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:12px;padding:10px 8px;text-align:center;}
+      .rp-age-emoji{font-size:20px;margin-bottom:4px;}
+      .rp-age-label{font-size:9px;font-weight:700;color:#A89660;margin-bottom:6px;line-height:1.3;}
+      .rp-age-inp{width:100%;border:1.5px solid #EDE8D8;border-radius:8px;padding:7px 4px;font-size:16px;font-weight:800;text-align:center;font-family:'Sarabun',sans-serif;color:#2C2510;background:#FFF;outline:none;}
+      .rp-age-inp:focus{border-color:#E8B84B;}
+      .rp-age-unit{font-size:10px;color:#A89660;margin-top:3px;}
+      .rp-inputs{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+      .rp-inp-row{background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:12px;padding:11px 13px;}
+      .rp-inp-label{font-size:12px;font-weight:700;color:#2C2510;margin-bottom:7px;}
+      .rp-inp-field{display:flex;align-items:center;gap:8px;}
+      .rp-inp-field .sinp{flex:1;margin-bottom:0;}
+      .rp-inp-unit{font-size:12px;color:#A89660;white-space:nowrap;}
+      .rp-rate-row{display:flex;gap:8px;}
+      .rp-rate-card{flex:1;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:12px;padding:10px 12px;}
+      .rp-rate-label{font-size:11px;font-weight:700;color:#2C2510;margin-bottom:7px;}
+      .rp-rate-inp-wrap{display:flex;align-items:center;gap:6px;}
+      .rp-rate-inp{flex:1;border:1.5px solid #EDE8D8;border-radius:8px;padding:8px 8px;font-size:16px;font-weight:800;text-align:center;font-family:'Sarabun',sans-serif;color:#2C2510;background:#FFF;outline:none;width:60px;}
+      .rp-rate-inp:focus{border-color:#E8B84B;}
+      .rp-rate-unit{font-size:11px;color:#A89660;}
+      .rp-calc-btn{width:100%;background:#2C2510;color:#FFF3C4;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;margin-bottom:16px;}
+      .rp-result-hero{display:flex;align-items:center;gap:12px;border-radius:14px;padding:16px;margin-bottom:14px;}
+      .rp-safe{background:#E8F5E0;border:1.5px solid #6ABF6A;}
+      .rp-warn{background:#FFF8DC;border:1.5px solid #E8B84B;}
+      .rp-hero-icon{font-size:28px;flex-shrink:0;}
+      .rp-hero-title{font-size:15px;font-weight:800;color:#2C2510;}
+      .rp-hero-sub{font-size:13px;color:#6B5E3C;margin-top:3px;}
+      .rp-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+      .rp-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:12px;padding:12px 11px;}
+      .rp-card-hl{background:#FFF3C4;border-color:#E8B84B;}
+      .rp-card-icon{font-size:18px;margin-bottom:5px;}
+      .rp-card-label{font-size:10px;font-weight:700;color:#A89660;margin-bottom:5px;line-height:1.4;}
+      .rp-card-val{font-size:15px;font-weight:800;color:#2C2510;margin-bottom:2px;}
+      .rp-card-val-hl{color:#B8860B;font-size:17px;}
+      .rp-card-sub{font-size:10px;color:#A89660;}
+      /* Wealth Path Chart */
+      .rp-chart{background:#FFF;border:1.5px solid #EDE8D8;border-radius:14px;padding:14px;margin-bottom:12px;position:relative;}
+      .rp-chart-bars{display:flex;align-items:flex-end;gap:2px;height:110px;padding-bottom:24px;}
+      .rp-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;height:100%;}
+      .rp-bar-wrap{flex:1;display:flex;align-items:flex-end;width:100%;}
+      .rp-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;}
+      .rp-bar-save{background:#E8B84B;}
+      .rp-bar-retire{background:#FF9090;}
+      .rp-bar-label{font-size:7px;color:#C4B88A;text-align:center;position:relative;height:16px;display:flex;align-items:flex-end;justify-content:center;}
+      .rp-retire-marker{position:absolute;top:-20px;font-size:8px;color:#7A4FA0;font-weight:800;white-space:nowrap;}
+      .rp-chart-legend{display:flex;gap:12px;margin-top:4px;font-size:10px;color:#A89660;}
+      .rpc-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;}
+      .rpc-dot.save{background:#E8B84B;}
+      .rpc-dot.retire{background:#FF9090;}
+      .rp-chart-ymax{position:absolute;top:10px;right:14px;font-size:10px;color:#C4B88A;font-weight:700;}
+      /* Scenarios */
+      .rp-scenarios{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+      .rp-scenario-row{display:flex;align-items:center;gap:10px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:11px 13px;}
+      .rps-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+      .rps-label{flex:1;font-size:12px;font-weight:600;color:#2C2510;}
+      .rps-val{font-size:13px;font-weight:800;}
+      .rp-note{font-size:10px;color:#C4B88A;text-align:center;line-height:1.6;margin-bottom:8px;}
+      .ef-t{font-size:14px;font-weight:800;color:#2C2510;}
+      .ef-s{font-size:11px;color:#7A6020;margin-top:2px;}
+      .ef-arr{font-size:20px;color:#2C2510;font-weight:700;}
+    `}</style>
+    <div className="hdr">
+      <div className="hdr-top">
+        <div className="hdr-brand"><div className="hdr-icon">🧾</div><div><div className="hdr-name">ภาษีฟรีแลนซ์</div>{user&&<div className="hdr-user">สวัสดี, {user} 👋</div>}</div></div>
+        <div className="hdr-right"><div className="hdr-year">ปี {YEAR_TH}</div><button className="hdr-out" onClick={()=>setScreen("login")}>↩</button></div>
+      </div>
+      <div className="hdr-tabs">{TABS.map(t=><button key={t.key} className={`htab ${tab===t.key?"on":""}`} onClick={()=>setTab(t.key)}><span className="htab-icon">{t.icon}</span><span>{t.label}</span></button>)}</div>
+    </div>
+    {tab==="learn"  &&<LearnTab/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData}/>}
+    {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal}/>}
+    {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings}/>}
+    {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings}/>}
+    <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
+  </div>;
+}
+
+// ── Shell (pre-login wrapper) ────────────────────────────────────────
+function Shell({children}) {
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#FFFDF5",fontFamily:"'Sarabun',sans-serif",overflow:"hidden"}}>
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Sarabun',sans-serif;background:#FFFDF5;}
+      .ob{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 24px;}
+      .ob-body{display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;transition:opacity .18s,transform .18s;}
+      .ob-fade{opacity:0;transform:translateX(-14px);}
+      .ob-ring{width:106px;height:106px;border-radius:50%;background:linear-gradient(135deg,#FFF3C4,#E8B84B44);display:flex;align-items:center;justify-content:center;margin-bottom:24px;box-shadow:0 8px 28px rgba(232,184,75,.2);}
+      .ob-em{font-size:50px;}
+      .ob-dots{display:flex;gap:6px;margin-bottom:18px;}
+      .od{width:7px;height:7px;border-radius:50%;background:#EDE8D8;transition:all .3s;}
+      .od-on{background:#E8B84B;width:20px;border-radius:4px;}
+      .ob-t1{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:#2C2510;margin-bottom:5px;}
+      .ob-t2{font-size:13px;font-weight:700;color:#E8B84B;margin-bottom:10px;}
+      .ob-t3{font-size:13px;color:#A89660;line-height:1.75;max-width:290px;margin-bottom:32px;}
+      .ob-btn{width:100%;max-width:300px;background:#2C2510;color:#FFF3C4;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;margin-bottom:10px;}
+      .ob-skip{background:none;border:none;color:#C4B88A;font-size:12px;font-weight:600;cursor:pointer;font-family:'Sarabun',sans-serif;padding:6px;}
+      .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 20px 30px;position:relative;}
+      .ldeco{position:absolute;top:0;left:0;right:0;height:230px;overflow:hidden;pointer-events:none;}
+      .ldc{position:absolute;border-radius:50%;}
+      .c1{width:200px;height:200px;top:-80px;right:-50px;background:linear-gradient(135deg,#FFF3C4,#FFE08A44);}
+      .c2{width:130px;height:130px;top:50px;left:-45px;background:linear-gradient(135deg,#FFF8DC,#EDE8D8);}
+      .c3{width:70px;height:70px;top:130px;right:28px;background:#FFF3C444;}
+      .lbrand{display:flex;flex-direction:column;align-items:center;padding-top:66px;margin-bottom:22px;position:relative;z-index:1;}
+      .licon{width:62px;height:62px;background:#E8B84B;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:31px;margin-bottom:10px;box-shadow:0 6px 18px rgba(232,184,75,.3);}
+      .ltitle{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#2C2510;margin-bottom:3px;}
+      .lsub{font-size:11px;color:#A89660;}
+      .lcard{background:#FFF;border-radius:20px;border:1.5px solid #EDE8D8;padding:18px;width:100%;box-shadow:0 4px 22px rgba(44,37,16,.06);position:relative;z-index:1;}
+      .gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#FFF;border:1.5px solid #EDE8D8;border-radius:11px;padding:12px;font-size:13px;font-weight:700;color:#2C2510;cursor:pointer;font-family:'Sarabun',sans-serif;margin-bottom:13px;transition:all .2s;}
+      .gbtn:hover{border-color:#D4C99A;}
+      .gbtn-load{opacity:.7;cursor:not-allowed;}
+      .gspin{width:16px;height:16px;border:2.5px solid #EDE8D8;border-top-color:#4285F4;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+      @keyframes spin{to{transform:rotate(360deg);}}
+      .lor{display:flex;align-items:center;gap:9px;margin-bottom:13px;}
+      .lorline{flex:1;height:1px;background:#EDE8D8;}
+      .lortext{font-size:11px;color:#C4B88A;font-weight:600;}
+      .ltabs{display:flex;background:#F5EFE0;border-radius:10px;padding:3px;margin-bottom:14px;gap:3px;}
+      .ltb{flex:1;padding:8px;border-radius:8px;border:none;background:none;font-size:12px;font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;color:#A89660;transition:all .2s;}
+      .ltb-on{background:#FFF;color:#2C2510;box-shadow:0 1px 4px rgba(44,37,16,.08);}
+      .ll{display:block;font-size:10px;font-weight:800;color:#A89660;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px;}
+      .li{width:100%;padding:10px 12px;border:1.5px solid #EDE8D8;border-radius:10px;font-size:14px;font-family:'Sarabun',sans-serif;outline:none;background:#FFFDF5;color:#2C2510;margin-bottom:11px;display:block;}
+      .li:focus{border-color:#E8B84B;}
+      .lerr{background:#FFF0F0;border:1.5px solid #F0AAAA;border-radius:9px;padding:8px 11px;font-size:12px;color:#C04848;margin-bottom:9px;font-weight:600;}
+      .lbtn{width:100%;background:#2C2510;color:#FFF3C4;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Sarabun',sans-serif;display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
+      .lbtn-load{opacity:.65;}
+      .lforgot{text-align:center;margin-top:11px;font-size:12px;color:#C4B88A;cursor:pointer;font-weight:600;}
+      .guest-btn{width:100%;display:flex;align-items:center;gap:11px;background:#FFFDF5;border:1.5px solid #EDE8D8;border-radius:15px;padding:13px 15px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-top:10px;position:relative;z-index:1;transition:all .2s;text-align:left;}
+      .guest-btn:hover{border-color:#D4C99A;}
+      .guest-icon{font-size:21px;flex-shrink:0;}
+      .guest-txt{flex:1;}
+      .guest-lbl{font-size:13px;font-weight:800;color:#2C2510;}
+      .guest-sub{font-size:11px;color:#A89660;margin-top:2px;}
+      .guest-arr{font-size:15px;color:#E8B84B;font-weight:700;flex-shrink:0;}
+      .lfooter{margin-top:16px;font-size:11px;color:#C4B88A;text-align:center;position:relative;z-index:1;}
+      /* Retirement Banner */
+      .retirement-banner{position:relative;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#2C2510 0%,#5A3E10 60%,#3A2808 100%);border-radius:20px;padding:18px 18px 18px 18px;margin-bottom:16px;cursor:pointer;overflow:hidden;border:1.5px solid #E8B84B44;box-shadow:0 6px 24px rgba(44,37,16,.22);transition:transform .18s,box-shadow .18s;}
+      .retirement-banner:active{transform:scale(.97);box-shadow:0 2px 10px rgba(44,37,16,.15);}
+      .rb-glow{position:absolute;top:-30px;right:-20px;width:120px;height:120px;background:radial-gradient(circle,#E8B84B33,transparent 70%);pointer-events:none;}
+      .rb-left{display:flex;align-items:center;gap:13px;flex:1;}
+      .rb-icon-wrap{width:52px;height:52px;background:#E8B84B22;border:1.5px solid #E8B84B55;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .rb-icon{font-size:26px;}
+      .rb-eyebrow{font-size:9px;font-weight:800;color:#E8B84B;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+      .rb-title{font-size:15px;font-weight:800;color:#FFF3C4;margin-bottom:3px;}
+      .rb-sub{font-size:11px;color:#A89660;line-height:1.45;}
+      .rb-cta{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;margin-left:10px;}
+      .rb-cta-text{font-size:9px;font-weight:800;color:#E8B84B;text-align:center;white-space:nowrap;}
+      .rb-arr{font-size:22px;color:#E8B84B;font-weight:700;line-height:1;}
+    `}</style>
+    {children}
+  </div>;
+}
