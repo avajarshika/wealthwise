@@ -296,9 +296,108 @@ function AddSheet({title,onSave,onClose,hasCategory}) {
   </div>;
 }
 
+
+// ── DocAddSheet — rich document form ─────────────────────────────────
+function DocAddSheet({monthIdx, onSave, onClose}) {
+  const [company, setCompany]   = useState("");
+  const [docType, setDocType]   = useState("หนังสือรับรองหัก ณ ที่จ่าย");
+  const [recipient, setRecipient] = useState("");
+  const [link, setLink]         = useState("");
+  const [note, setNote]         = useState("");
+  const [file, setFile]         = useState(null);
+  const [preview, setPreview]   = useState(null);
+  const fileRef = useRef();
+
+  const DOC_TYPES = [
+    "หนังสือรับรองหัก ณ ที่จ่าย",
+    "ใบแจ้งหนี้ (Invoice)",
+    "ใบเสร็จรับเงิน",
+    "สลิปโอนเงิน",
+    "สัญญาจ้าง",
+    "อื่นๆ",
+  ];
+
+  const handleFile = (e) => {
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFile({name:f.name, dataUrl:ev.target.result, size:(f.size/1024).toFixed(1)+" KB"});
+      if(f.type.startsWith("image/")) setPreview(ev.target.result);
+    };
+    reader.readAsDataURL(f);
+    e.target.value="";
+  };
+
+  const save = () => {
+    if(!company && !link && !file) return;
+    onSave({
+      id: Date.now(),
+      company: company||"",
+      docType: docType||"",
+      recipient: recipient||"",
+      link: link||"",
+      note: note||"",
+      name: file?.name || (company ? `${company} — ${docType}` : "เอกสาร"),
+      dataUrl: file?.dataUrl||"",
+      size: file?.size||"",
+      date: new Date().toLocaleDateString("th-TH"),
+      monthIdx,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet" style={{maxHeight:"90vh"}}>
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">📎 บันทึกเอกสารรายได้</div>
+
+        <div className="ish-sec-label">ประเภทเอกสาร</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
+          {DOC_TYPES.map(t=><button key={t} onClick={()=>setDocType(t)}
+            style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${docType===t?"#E8B84B":"#EDE8D8"}`,background:docType===t?"#FFF3C4":"#FFF",color:docType===t?"#B8860B":"#A89660",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>
+            {t}
+          </button>)}
+        </div>
+
+        <div className="ish-sec-label">กิจการ / บริษัท</div>
+        <input className="sinp" placeholder="เช่น บริษัท โซล อเมซซิ่ง จำกัด" value={company} onChange={e=>setCompany(e.target.value)}/>
+
+        <div className="ish-sec-label">ออกให้กับ</div>
+        <input className="sinp" placeholder="เช่น นางสาว จารชิกา แก้ววรรณา" value={recipient} onChange={e=>setRecipient(e.target.value)}/>
+
+        <div className="ish-sec-label">Link เอกสาร (ถ้ามี)</div>
+        <input className="sinp" placeholder="https://..." value={link} onChange={e=>setLink(e.target.value)} type="url"/>
+        {link&&<a href={link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2E6DA4",display:"block",marginTop:-6,marginBottom:10,wordBreak:"break-all"}}>🔗 {link.substring(0,50)}{link.length>50?"...":""}</a>}
+
+        <div className="ish-sec-label">หมายเหตุ</div>
+        <input className="sinp" placeholder="บันทึกเพิ่มเติม (ไม่บังคับ)" value={note} onChange={e=>setNote(e.target.value)}/>
+
+        <div className="ish-sec-label">แนบไฟล์ (ไม่บังคับ)</div>
+        {preview&&<img src={preview} alt="preview" style={{width:"100%",borderRadius:10,marginBottom:8,maxHeight:160,objectFit:"cover"}}/>}
+        {file&&!preview&&<div style={{background:"#F5EFE0",borderRadius:10,padding:"10px 13px",marginBottom:8,fontSize:12,color:"#2C2510",fontWeight:600}}>📄 {file.name} · {file.size}</div>}
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          <button onClick={()=>fileRef.current.click()} style={{flex:1,background:"#FFF",border:"1.5px dashed #D4C99A",borderRadius:11,padding:12,fontSize:13,color:"#A89660",fontWeight:600,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>
+            {file?"🔄 เปลี่ยนไฟล์":"📎 แนบรูป / PDF"}
+          </button>
+          {file&&<button onClick={()=>{setFile(null);setPreview(null);}} style={{background:"#FFF0F0",border:"1.5px solid #F0AAAA",borderRadius:11,padding:"12px 14px",color:"#C04848",cursor:"pointer",fontSize:13}}>🗑</button>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={handleFile}/>
+
+        <div className="sheet-btns">
+          <button className="sbtn-c" onClick={onClose}>ยกเลิก</button>
+          <button className="sbtn-s" onClick={save}>บันทึกเอกสาร ✓</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
-  const docs=docsState||Array.from({length:12},()=>[]);const docRef=useRef();
+  const docs=docsState||Array.from({length:12},()=>[]);
+  const [showDocSheet,setShowDocSheet]=useState(false);
+  const docRef=useRef();
   const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
   const annualInc=data.reduce((s,d)=>s+d.income,0);const {monthly:taxMo}=calcPersonalTax(annualInc);
   const addIncome=({amount})=>setData(d=>d.map((r,i)=>i===sel?{...r,income:amount}:r));
@@ -324,19 +423,33 @@ function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall
     {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
     {m.income>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
     {/* ── เอกสารรายได้ ── */}
-    <div className="sec-hd" style={{marginTop:4}}><span>📎 เอกสารรายได้เดือนนี้</span><button className="sec-add" onClick={()=>{if(userPlan==="free"){onPaywall("อัปโหลดเอกสาร");}else{docRef.current.click();}}}>+ แนบไฟล์</button></div>
+    <div className="sec-hd" style={{marginTop:4}}>
+      <span>📎 เอกสารรายได้เดือนนี้</span>
+      <button className="sec-add" onClick={()=>setShowDocSheet(true)}>+ เพิ่มเอกสาร</button>
+    </div>
     {docs[sel].length===0
-      ?<div className="empty-card" onClick={()=>{if(userPlan==="free"){onPaywall("อัปโหลดเอกสาร");}else{docRef.current.click();}}}>แตะเพื่อแนบสลิป ใบแจ้งหนี้ หรือเอกสาร →</div>
-      :<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:10}}>
-        {docs[sel].map(d=><div key={d.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:11,padding:"10px 13px",display:"flex",alignItems:"center",gap:9}}>
-          <span style={{fontSize:20,flexShrink:0}}>{(()=>{const n=d.name.toLowerCase();return n.endsWith(".jpg")||n.endsWith(".jpeg")||n.endsWith(".png")||n.endsWith(".gif")||n.endsWith(".webp")?"🖼️":n.endsWith(".pdf")?"📄":"📎";})()}</span>
-          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:"#2C2510",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</div><div style={{fontSize:10,color:"#A89660",marginTop:1}}>{d.size} · {d.date}</div></div>
-          <a href={d.dataUrl} download={d.name}><button style={{background:"#FFF3C4",border:"none",color:"#B8860B",fontSize:11,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>⬇</button></a>
-          <button className="del-btn" onClick={()=>setDocsState(prev=>prev.map((arr,i)=>i===sel?arr.filter(x=>x.id!==d.id):arr));if(deleteDocFromDB)deleteDocFromDB(d.id)}>🗑</button>
+      ?<div className="empty-card" onClick={()=>setShowDocSheet(true)}>แตะเพื่อบันทึกสลิป ใบหัก ณ ที่จ่าย หรือ Link เอกสาร →</div>
+      :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+        {docs[sel].map(d=><div key={d.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:12,padding:"12px 13px"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:d.link||d.note?8:0}}>
+            <span style={{fontSize:20,flexShrink:0}}>{d.dataUrl&&d.dataUrl.startsWith("data:image")?"🖼️":d.dataUrl?"📄":"🔗"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{d.docType||"เอกสาร"}</div>
+              {d.company&&<div style={{fontSize:11,color:"#6B5E3C",marginTop:1}}>{d.company}</div>}
+              {d.recipient&&<div style={{fontSize:11,color:"#A89660"}}>ถึง: {d.recipient}</div>}
+              <div style={{fontSize:10,color:"#C4B88A",marginTop:2}}>{d.date}</div>
+            </div>
+            <button className="del-btn" onClick={()=>{setDocsState(prev=>prev.map((arr,i)=>i===sel?arr.filter(x=>x.id!==d.id):arr));if(deleteDocFromDB)deleteDocFromDB(d.id);}}>🗑</button>
+          </div>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {d.link&&<a href={d.link} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><button style={{background:"#E8F5FF",border:"none",color:"#2E6DA4",fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>🔗 เปิด Link</button></a>}
+            {d.dataUrl&&<a href={d.dataUrl} download={d.name}><button style={{background:"#FFF3C4",border:"none",color:"#B8860B",fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>⬇ ดาวน์โหลด</button></a>}
+            {d.note&&<span style={{fontSize:11,color:"#A89660",padding:"5px 0"}}>💬 {d.note}</span>}
+          </div>
         </div>)}
       </div>
     }
-    <input ref={docRef} type="file" accept="image/*,application/pdf,*/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{const doc={id:Date.now(),name:file.name,dataUrl:ev.target.result,size:(file.size/1024).toFixed(1)+" KB",date:new Date().toLocaleDateString("th-TH")};const newDoc={...doc};setDocsState(prev=>prev.map((arr,i)=>i===sel?[...arr,newDoc]:arr));if(saveDocToDB)saveDocToDB(sel,newDoc);};reader.readAsDataURL(file);e.target.value="";}}/>
+    {showDocSheet&&<DocAddSheet monthIdx={sel} onSave={doc=>{setDocsState(prev=>prev.map((arr,i)=>i===sel?[...arr,doc]:arr));if(saveDocToDB)saveDocToDB(sel,doc);}} onClose={()=>setShowDocSheet(false)}/>}
     {sheet&&<AddSheet title={sheet==="income"?"บันทึกรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
   </div>;
 }
@@ -592,6 +705,7 @@ function RetirementPlanner({onClose, userId}) {
   const [currentSavings,setCurSav]=useState("0");
   const [result, setResult] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Load saved plan from Supabase on open
   useEffect(()=>{
@@ -758,6 +872,12 @@ function RetirementPlanner({onClose, userId}) {
         </div>
 
         <button className="rp-calc-btn" onClick={calc}>{result?"คำนวณใหม่ →":"คำนวณ →"}</button>
+        {result&&userId&&<button onClick={async()=>{
+          await supabase.from("retirement_plans").upsert({user_id:userId,age:parseInt(age),ret_age:parseInt(retAge),life_age:parseInt(lifeAge),expense:parseFloat(expense),inflation:parseFloat(inflation),return_rate:parseFloat(returnRate),current_savings:parseFloat(currentSavings||0)},{onConflict:"user_id"});
+          setSaved(true);setTimeout(()=>setSaved(false),2500);
+        }} style={{width:"100%",background:saved?"#4A7C3F":"#2C2510",color:"#FFF3C4",border:"none",borderRadius:12,padding:13,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:10,transition:"background .3s"}}>
+          {saved?"✅ บันทึกแล้ว!":"💾 บันทึกแผนเกษียณ"}
+        </button>}
 
         {result && (<>
           {/* Key results */}
@@ -1019,7 +1139,7 @@ export default function App() {
     // Load savings
     const {data:svdata}=await supabase.from("savings").select("*").eq("user_id",uid);
     // Load docs (metadata only, not dataUrl to save bandwidth)
-    const {data:docsdata}=await supabase.from("docs").select("id,month_idx,name,size,date,data_url").eq("user_id",uid).eq("year",year);
+    const {data:docsdata}=await supabase.from("docs").select("id,month_idx,name,size,date,data_url,company,doc_type,recipient,link,note").eq("user_id",uid).eq("year",year);
 
     if(mdata){
       const newData=initData();
@@ -1045,7 +1165,7 @@ export default function App() {
       const docArr=Array.from({length:12},()=>[]);
       docsdata.forEach(d=>{
         const mi=d.month_idx;
-        if(mi>=0&&mi<12) docArr[mi].push({id:d.id,name:d.name,size:d.size,date:d.date,dataUrl:d.data_url});
+        if(mi>=0&&mi<12) docArr[mi].push({id:d.id,name:d.name,size:d.size,date:d.date,dataUrl:d.data_url,company:d.company||'',docType:d.doc_type||'',recipient:d.recipient||'',link:d.link||'',note:d.note||''});
       });
       setDocsState(docArr);
     }
@@ -1092,10 +1212,15 @@ export default function App() {
       user_id: userId,
       month_idx: monthIdx,
       year: new Date().getFullYear(),
-      name: doc.name,
+      name: doc.name||"",
       data_url: doc.dataUrl||"",
       size: doc.size||"",
       date: doc.date||"",
+      company: doc.company||"",
+      doc_type: doc.docType||"",
+      recipient: doc.recipient||"",
+      link: doc.link||"",
+      note: doc.note||"",
     },{onConflict:"id"});
   };
 
@@ -1114,7 +1239,7 @@ export default function App() {
   const [drawerOpen,setDrawerOpen]=useState(false);
   const [userEmail,setUserEmail]=useState(null);
   const [paywallFeature,setPaywallFeature]=useState(null);
-  const [userPlan,setUserPlan]=useState("free"); // free | pro | proplus
+  const [userPlan,setUserPlan]=useState("proplus"); // everyone free for now
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
   const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setDocsState(Array.from({length:12},()=>[]));setScreen("login");};
   if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
@@ -1511,11 +1636,11 @@ export default function App() {
       .ef-arr{font-size:20px;color:#2C2510;font-weight:700;}
     `}</style>
     {/* ── Drawer ── */}
-    {drawerOpen&&<div style={{position:"fixed",inset:0,zIndex:100,display:"flex",justifyContent:"flex-end"}} onClick={()=>setDrawerOpen(false)}>
-      <div style={{width:280,background:"#FFFDF5",height:"100%",boxShadow:"-8px 0 32px rgba(44,37,16,.18)",overflowY:"auto",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+    {drawerOpen&&<div style={{position:"fixed",inset:0,zIndex:100,background:"#FFFDF5",overflowY:"auto",display:"flex",flexDirection:"column",maxWidth:430,margin:"0 auto",left:0,right:0}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
         {/* Drawer header */}
-        <div style={{background:"linear-gradient(135deg,#2C2510,#4A3E22)",padding:"44px 20px 24px",position:"relative"}}>
-          <button onClick={()=>setDrawerOpen(false)} style={{position:"absolute",top:12,right:12,background:"#ffffff22",border:"none",color:"#FFF3C4",width:30,height:30,borderRadius:"50%",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        <div style={{background:"linear-gradient(135deg,#2C2510,#4A3E22)",padding:"52px 20px 24px",position:"relative"}}>
+          <button onClick={()=>setDrawerOpen(false)} style={{position:"absolute",top:16,left:16,background:"#ffffff22",border:"none",color:"#FFF3C4",width:36,height:36,borderRadius:"50%",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
           <div style={{width:56,height:56,background:"#E8B84B",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,marginBottom:12}}>👤</div>
           <div style={{fontSize:16,fontWeight:800,color:"#FFF3C4",marginBottom:3}}>{user||"ผู้ทดลองใช้"}</div>
           <div style={{fontSize:11,color:"#A89660",marginBottom:6}}>WealthWise Member</div>
@@ -1570,7 +1695,6 @@ export default function App() {
       </div>
     </div>}
 
-    {paywallFeature&&<PaywallPopup feature={paywallFeature} onClose={()=>setPaywallFeature(null)} onUpgrade={()=>setPaywallFeature(null)}/>}
     {/* ── Header ── */}
     <div className="hdr">
       <div className="hdr-top">
