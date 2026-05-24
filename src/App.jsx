@@ -102,7 +102,7 @@ function calcCorpTax(revenue) {
   return {profit, corpTax, salaryTax, salary, totalTax, tax:corpTax, taxable:profit, monthly:totalTax/12};
 }
 
-const initData = () => Array.from({length:12},(_,i)=>({month:i,income:0,expenses:[]}));
+const initData = () => Array.from({length:12},(_,i)=>({month:i,income:0,incomes:[],expenses:[]}));
 
 // ── Google Icon ──────────────────────────────────────────────────────
 function GIcon() {
@@ -281,15 +281,15 @@ function LearnTab() {
 }
 
 // ── Money Tab ────────────────────────────────────────────────────────
-function AddSheet({title,onSave,onClose,hasCategory}) {
+function AddSheet({title,onSave,onClose,hasCategory,isIncome}) {
   const [desc,setDesc]=useState("");const [amount,setAmount]=useState("");const [cat,setCat]=useState(EXPENSE_CATS[0]);
-  const save=()=>{if(!amount)return;onSave({id:Date.now(),desc:desc||(hasCategory?cat:"รายการ"),amount:parseFloat(amount),cat:hasCategory?cat:null});onClose();};
+  const save=()=>{if(!amount)return;onSave({id:Date.now(),desc:desc||(hasCategory?cat:isIncome?"รายได้":"รายการ"),amount:parseFloat(amount),cat:hasCategory?cat:null});onClose();};
   return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
     <div className="sheet">
       <div className="sheet-pill"/>
       <div className="sheet-ttl">{title}</div>
       {hasCategory&&<div className="cat-scroll">{EXPENSE_CATS.map(c=><button key={c} className={`cat-chip ${cat===c?"cat-on":""}`} onClick={()=>setCat(c)}>{c}</button>)}</div>}
-      <input className="sinp" placeholder="รายละเอียด (ไม่บังคับ)" value={desc} onChange={e=>setDesc(e.target.value)}/>
+      <input className="sinp" placeholder={isIncome?"ชื่อรายได้ เช่น งานออกแบบ Logo":"รายละเอียด (ไม่บังคับ)"} value={desc} onChange={e=>setDesc(e.target.value)}/>
       <input className="sinp sinp-lg" type="number" placeholder="จำนวนเงิน (บาท)" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
       <div className="sheet-btns"><button className="sbtn-c" onClick={onClose}>ยกเลิก</button><button className="sbtn-s" onClick={save}>บันทึก ✓</button></div>
     </div>
@@ -393,14 +393,24 @@ function DocAddSheet({monthIdx, onSave, onClose}) {
   );
 }
 
-function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB}) {
+function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
   const docs=docsState||Array.from({length:12},()=>[]);
   const [showDocSheet,setShowDocSheet]=useState(false);
   const docRef=useRef();
-  const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
-  const annualInc=data.reduce((s,d)=>s+d.income,0);const {monthly:taxMo}=calcPersonalTax(annualInc);
-  const addIncome=({amount})=>{setData(d=>d.map((r,i)=>i===sel?{...r,income:parseFloat(amount)}:r));if(saveIncome)saveIncome(sel,parseFloat(amount));};
+  const m=data[sel];
+  const totalInc=(m.incomes&&m.incomes.length>0)?m.incomes.reduce((s,e)=>s+e.amount,0):m.income;
+  const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=totalInc-totalExp;
+  const annualInc=data.reduce((s,d)=>s+((d.incomes&&d.incomes.length>0)?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const {monthly:taxMo}=calcPersonalTax(annualInc);
+  const addIncome=(entry)=>{
+    const newEntry={id:Date.now(),desc:entry.desc||"รายได้",amount:parseFloat(entry.amount),date:new Date().toLocaleDateString("th-TH")};
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:[...(r.incomes||[]),newEntry],income:((r.incomes||[]).reduce((s,e)=>s+e.amount,0))+parseFloat(entry.amount)}:r));
+    if(saveIncomeEntry)saveIncomeEntry(sel,newEntry);
+  };
+  const delIncome=(id,amount)=>{
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id),income:Math.max(0,((r.incomes||[]).reduce((s,e)=>s+e.amount,0))-amount)}:r));
+    if(userId)supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
+  };
   const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
   const delExp=async id=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.filter(e=>e.id!==id)}:r));if(userId){await supabase.from('expenses').delete().eq('id',id).eq('user_id',userId);}};
   const expPct=Math.min((totalExp/Math.max(m.income,1))*100,100);
@@ -409,7 +419,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall
     <div className="money-hero">
       <div className="mh-month">{MONTH_FULL[sel]} {YEAR_TH}</div>
       <div className="mh-cols">
-        <div className="mhc"><div className="mhc-label">รายได้</div><div className="mhc-val inc">{fmt(m.income)}<span className="mhc-unit"> ฿</span></div></div>
+        <div className="mhc"><div className="mhc-label">รายได้</div><div className="mhc-val inc">{fmt(totalInc)}<span className="mhc-unit"> ฿</span></div></div>
         <div className="mhc-sep"/>
         <div className="mhc"><div className="mhc-label">ค่าใช้จ่าย</div><div className="mhc-val exp">{fmt(totalExp)}<span className="mhc-unit"> ฿</span></div></div>
         <div className="mhc-sep"/>
@@ -450,7 +460,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall
       </div>
     }
     {showDocSheet&&<DocAddSheet monthIdx={sel} onSave={doc=>{setDocsState(prev=>prev.map((arr,i)=>i===sel?[...arr,doc]:arr));if(saveDocToDB)saveDocToDB(sel,doc);}} onClose={()=>setShowDocSheet(false)}/>}
-    {sheet&&<AddSheet title={sheet==="income"?"บันทึกรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
+    {sheet&&<AddSheet title={sheet==="income"?"+ เพิ่มรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} isIncome={sheet==="income"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
   </div>;
 }
 
@@ -1134,6 +1144,7 @@ export default function App() {
     const year = new Date().getFullYear();
     // Load income + expenses
     const {data:mdata}=await supabase.from("monthly_data").select("*").eq("user_id",uid).eq("year",year);
+    const {data:incEntries}=await supabase.from("income_entries").select("*").eq("user_id",uid).eq("year",year);
     const {data:exps}=await supabase.from("expenses").select("*").eq("user_id",uid).eq("year",year);
     const {data:gdata}=await supabase.from("goals").select("*").eq("user_id",uid);
     // Load savings
@@ -1144,6 +1155,7 @@ export default function App() {
     if(mdata){
       const newData=initData();
       mdata.forEach(m=>{const idx=m.month;if(newData[idx])newData[idx].income=m.income;});
+      if(incEntries)incEntries.forEach(e=>{const idx=e.month_idx;if(newData[idx]){if(!newData[idx].incomes)newData[idx].incomes=[];newData[idx].incomes.push({id:e.id,desc:e.description,amount:e.amount,date:e.date});}});
       if(exps)exps.forEach(e=>{const idx=e.month;if(newData[idx])newData[idx].expenses.push({id:e.id,desc:e.name,amount:e.amount,cat:e.cat,date:e.date||""});});
       setData(newData);
     }
@@ -1173,7 +1185,22 @@ export default function App() {
 
   const saveIncome = async(monthIdx, income)=>{
     if(!userId)return;
-    await supabase.from("monthly_data").upsert({user_id:userId,month:monthIdx,year:new Date().getFullYear(),income},{onConflict:"user_id,month,year"});
+    await supabase.from("monthly_data").upsert({user_id:userId,month:monthIdx,year:new Date().getFullYear(),income:income},{onConflict:"user_id,month,year"});
+  };
+
+  const saveIncomeEntry = async(monthIdx, entry)=>{
+    if(!userId)return;
+    await supabase.from("income_entries").upsert({
+      id: entry.id,
+      user_id: userId,
+      month_idx: monthIdx,
+      year: new Date().getFullYear(),
+      description: entry.desc||"รายได้",
+      amount: entry.amount,
+      date: entry.date||"",
+    },{onConflict:"id"});
+    // Also update total in monthly_data
+    await supabase.from("monthly_data").upsert({user_id:userId,month:monthIdx,year:new Date().getFullYear(),income:entry.amount},{onConflict:"user_id,month,year"});
   };
 
   const saveExpense = async(monthIdx, exp)=>{
@@ -1713,7 +1740,7 @@ export default function App() {
     </div>
     <div style={{paddingBottom:84,width:"100%"}}>
     {tab==="learn"  &&<LearnTab/>}
-    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB}/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB}/>}
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB} saveSavingToDB={saveSavingToDB} deleteSavingFromDB={deleteSavingFromDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature}/>}
