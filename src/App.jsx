@@ -400,9 +400,9 @@ function MoneyTab({data,setData,userId,saveIncome,saveExpense,userPlan,onPaywall
   const docRef=useRef();
   const m=data[sel];const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=m.income-totalExp;
   const annualInc=data.reduce((s,d)=>s+d.income,0);const {monthly:taxMo}=calcPersonalTax(annualInc);
-  const addIncome=({amount})=>setData(d=>d.map((r,i)=>i===sel?{...r,income:amount}:r));
-  const addExp=entry=>setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));
-  const delExp=id=>setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.filter(e=>e.id!==id)}:r));
+  const addIncome=({amount})=>{setData(d=>d.map((r,i)=>i===sel?{...r,income:parseFloat(amount)}:r));if(saveIncome)saveIncome(sel,parseFloat(amount));};
+  const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
+  const delExp=async id=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.filter(e=>e.id!==id)}:r));if(userId){await supabase.from('expenses').delete().eq('id',id).eq('user_id',userId);}};
   const expPct=Math.min((totalExp/Math.max(m.income,1))*100,100);
   return <div className="tab-content">
     <div className="month-scroll">{MONTHS_TH.map((mo,i)=><button key={i} className={`mo-chip ${sel===i?"mo-on":""}`} onClick={()=>setSel(i)}>{mo}{data[i].income>0&&<span className="mo-dot"/>}</button>)}</div>
@@ -978,9 +978,9 @@ function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
   const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {tax}=calcPersonalTax(totalInc);const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
   const totalGoalSaved=goals.reduce((s,g)=>s+g.saved,0);const netLeft=Math.max(0,totalInc-totalExp-tax-totalSaved-totalGoalSaved);
-  const saveGoal=g=>setGoals(prev=>{const ex=prev.find(x=>x.id===g.id);return ex?prev.map(x=>x.id===g.id?g:x):[...prev,g];});
-  const delGoal=id=>setGoals(prev=>prev.filter(g=>g.id!==id));
-  const doDeposit=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
+  const saveGoal=g=>{setGoals(prev=>{const ex=prev.find(x=>x.id===g.id);return ex?prev.map(x=>x.id===g.id?g:x):[...prev,g];});if(saveGoalToDB)saveGoalToDB(g);};
+  const delGoal=async id=>{setGoals(prev=>prev.filter(g=>g.id!==id));if(userId){await supabase.from('goals').delete().eq('id',id).eq('user_id',userId);}};
+  const doDeposit=(goalId,dep)=>{setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));if(saveGoalToDB){const g=goals.find(x=>x.id===goalId);if(g)saveGoalToDB({...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]});}};
   const doDeleteDeposit=(goalId,depId)=>setGoals(prev=>prev.map(g=>{if(g.id!==goalId)return g;const dep=g.deposits?.find(d=>d.id===depId);const newSaved=Math.max(0,g.saved-(dep?.amount||0));return {...g,saved:newSaved,deposits:(g.deposits||[]).filter(d=>d.id!==depId)};}));
   const moLeft=dl=>{if(!dl)return null;const [y,m]=dl.split("-").map(Number);const now=new Date();return Math.max(1,(y-now.getFullYear())*12+(m-now.getMonth()-1));};
   return <div className="tab-content">
