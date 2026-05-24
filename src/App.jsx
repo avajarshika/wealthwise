@@ -149,7 +149,7 @@ function Login({onLogin}) {
       const {data,error}=await supabase.auth.signUp({email,password:pass,options:{data:{name}}});
       if(error){setErr(error.message);setLoading(false);return;}
       if(data.user){
-        await supabase.from("profiles").upsert({id:data.user.id,name:name||email.split("@")[0]});
+        await supabase.from("profiles").upsert({id:data.user.id,name:name||email.split("@")[0],email:email});
         onLogin(name||email.split("@")[0], data.user.id, email);
       }
     } else {
@@ -157,7 +157,7 @@ function Login({onLogin}) {
       if(error){setErr(lang==="th"?"อีเมลหรือรหัสผ่านไม่ถูกต้อง":"Invalid email or password");setLoading(false);return;}
       if(data.user){
         const {data:profile}=await supabase.from("profiles").select("name").eq("id",data.user.id).single();
-        onLogin(profile?.name||email.split("@")[0]);
+        onLogin(profile?.name||email.split("@")[0], data.user.id, email);
       }
     }
     setLoading(false);
@@ -176,7 +176,7 @@ function Login({onLogin}) {
       <button className={`lbtn ${loading?"lbtn-load":""}`} onClick={submit} disabled={loading}>{loading?<span className="gspin"/>:mode==="login"?t("signIn",lang):t("register",lang)}</button>
       {mode==="login"&&<div className="lforgot">{t("forgotPass",lang)}</div>}
     </div>
-    <button className="guest-btn" onClick={()=>onLogin(lang==="th"?"ผู้ทดลองใช้":"Guest")}>
+    <button className="guest-btn" onClick={()=>onLogin("ผู้ทดลองใช้", null, null)}>
       <span className="guest-icon">👀</span>
       <div className="guest-txt"><div className="guest-lbl">{t("guestLabel",lang)}</div><div className="guest-sub">{t("guestSub",lang)}</div></div>
       <span className="guest-arr">→</span>
