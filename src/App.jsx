@@ -404,11 +404,11 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
   const annualInc=data.reduce((s,d)=>s+((d.incomes&&d.incomes.length>0)?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const {monthly:taxMo}=calcPersonalTax(annualInc);
   const addIncome=(entry)=>{
     const newEntry={id:Date.now(),desc:entry.desc||"รายได้",amount:parseFloat(entry.amount),date:new Date().toLocaleDateString("th-TH")};
-    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:[...(r.incomes||[]),newEntry],income:((r.incomes||[]).reduce((s,e)=>s+e.amount,0))+parseFloat(entry.amount)}:r));
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:[...(r.incomes||[]),newEntry]}:r));
     if(saveIncomeEntry)saveIncomeEntry(sel,newEntry);
   };
   const delIncome=(id,amount)=>{
-    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id),income:Math.max(0,((r.incomes||[]).reduce((s,e)=>s+e.amount,0))-amount)}:r));
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id)}:r));
     if(userId)supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
   };
   const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
@@ -502,7 +502,7 @@ function InvestSheet({opt,selMonth,savings,onSave,onClose,goals,onDepositGoal}) 
 
 // ── Plan Tab ─────────────────────────────────────────────────────────
 function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,saveGoalToDB,saveSavingToDB,deleteSavingFromDB}) {
-  const totalIncome=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const totalIncome=data.reduce((s,d)=>s+(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {tax}=calcPersonalTax(totalIncome);const afterTax=Math.max(0,totalIncome-totalExp-tax);
   const [openOpt,setOpenOpt]=useState(null);const [selMonth]=useState(NOW_MONTH);
   const handleSave=(optId,monthIdx,entry,delId)=>{
@@ -985,7 +985,7 @@ function RetirementPlanner({onClose, userId}) {
 // ── Goals Tab ────────────────────────────────────────────────────────
 function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
   const [showAdd,setShowAdd]=useState(false);const [editGoal,setEditGoal]=useState(null);const [detailGoal,setDetailGoal]=useState(null);const [showRetirement,setShowRetirement]=useState(false);
-  const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const totalInc=data.reduce((s,d)=>s+(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {tax}=calcPersonalTax(totalInc);const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
   const totalGoalSaved=goals.reduce((s,g)=>s+g.saved,0);const netLeft=Math.max(0,totalInc-totalExp-tax-totalSaved-totalGoalSaved);
   const saveGoal=g=>{setGoals(prev=>{const ex=prev.find(x=>x.id===g.id);return ex?prev.map(x=>x.id===g.id?g:x):[...prev,g];});if(saveGoalToDB)saveGoalToDB(g);};
@@ -1054,9 +1054,9 @@ function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
 
 // ── Summary Tab ──────────────────────────────────────────────────────
 function SummaryTab({data,goals,savings,userPlan,onPaywall}) {
-  const totalInc=data.reduce((s,d)=>s+d.income,0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const totalInc=data.reduce((s,d)=>s+(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {taxable,tax}=calcPersonalTax(totalInc);const net=totalInc-totalExp-tax;
-  const maxInc=Math.max(...data.map(d=>d.income),1);
+  const maxInc=Math.max(...data.map(d=>(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income)),1);
   const catMap={};data.forEach(m=>m.expenses.forEach(e=>{const k=e.cat||"อื่นๆ";catMap[k]=(catMap[k]||0)+e.amount;}));
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
@@ -1074,7 +1074,7 @@ function SummaryTab({data,goals,savings,userPlan,onPaywall}) {
     </div>
     <div className={`tax-res ${tax===0?"tr-safe":"tr-warn"}`}><div className="tr-label">ภาษีที่ต้องจ่ายปีนี้</div><div className="tr-val">{tax===0?"ไม่ต้องจ่าย 🎉":`${fmt(tax)} บาท`}</div><div className="tr-note">{tax===0?"แต่ยังต้องยื่นแบบถ้ารายได้ > 60,000 บ./ปี":"ยื่นออนไลน์ที่ efiling.rd.go.th ภายในมีนาคม"}</div></div>
     <div className="sec-hd2">รายได้รายเดือน</div>
-    <div className="mo-bars">{data.map((d,i)=>{const t=d.income;const pct=(t/maxInc)*100;return <div className="mob-row" key={i}><div className="mob-label">{MONTHS_TH[i]}</div><div className="mob-track"><div className="mob-inc" style={{width:`${pct}%`}}/><div className="mob-exp" style={{width:`${Math.min((d.expenses.reduce((s,e)=>s+e.amount,0)/Math.max(t,1))*100,100)}%`}}/></div><div className="mob-val">{t>0?`${fmtK(t)} ฿`:"—"}</div></div>;})}</div>
+    <div className="mo-bars">{data.map((d,i)=>{const t=(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income);const pct=(t/maxInc)*100;return <div className="mob-row" key={i}><div className="mob-label">{MONTHS_TH[i]}</div><div className="mob-track"><div className="mob-inc" style={{width:`${pct}%`}}/><div className="mob-exp" style={{width:`${Math.min((d.expenses.reduce((s,e)=>s+e.amount,0)/Math.max(t,1))*100,100)}%`}}/></div><div className="mob-val">{t>0?`${fmtK(t)} ฿`:"—"}</div></div>;})}</div>
     {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
     {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
     <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
