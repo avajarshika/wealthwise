@@ -356,6 +356,30 @@ function EditExpenseSheet({entry, onSave, onClose}) {
   );
 }
 
+
+function EditRecSheet({editRec, optColor, onSave, onClose}) {
+  const [note, setNote] = useState(editRec.note||"");
+  const [amount, setAmount] = useState(String(editRec.amount||""));
+  const save = () => {
+    if(!amount) return;
+    onSave({...editRec, note, amount: parseFloat(amount)});
+  };
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">✏️ แก้ไขรายการ</div>
+        <input className="sinp" placeholder="หมายเหตุ" value={note} onChange={e=>setNote(e.target.value)}/>
+        <input className="sinp sinp-lg" type="number" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={onClose}>ยกเลิก</button>
+          <button className="sbtn-s" style={{background:optColor||"#2C2510"}} onClick={save}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── DocAddSheet — rich document form ─────────────────────────────────
 function DocAddSheet({monthIdx, onSave, onClose}) {
   const [company, setCompany]   = useState("");
@@ -801,21 +825,7 @@ function GoalDetailSheet({goal, onDeposit, onDeleteDeposit, onClose}) {
         <button className="sbtn-c" style={{width:"100%",marginTop:4}} onClick={onClose}>ปิด</button>
       </div>
     </div>
-    {editRec&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setEditRec(null);}}>
-      <div className="sheet">
-        <div className="sheet-pill"/>
-        <div className="sheet-ttl">✏️ แก้ไขรายการ</div>
-        <input className="sinp" placeholder="หมายเหตุ" defaultValue={editRec.note} onChange={e=>setEditRec(r=>({...r,note:e.target.value}))}/>
-        <input className="sinp sinp-lg" type="number" defaultValue={editRec.amount} onChange={e=>setEditRec(r=>({...r,amount:parseFloat(e.target.value)}))}/>
-        <div className="sheet-btns" style={{marginTop:8}}>
-          <button className="sbtn-c" onClick={()=>setEditRec(null)}>ยกเลิก</button>
-          <button className="sbtn-s" style={{background:opt.color}} onClick={()=>{
-            onSave(opt.id,month,editRec);
-            setEditRec(null);
-          }}>บันทึก ✓</button>
-        </div>
-      </div>
-    </div>}
+    {editRec&&<EditRecSheet editRec={editRec} optColor={opt.color} onSave={(updated)=>{onSave(opt.id,month,updated);setEditRec(null);}} onClose={()=>setEditRec(null)}/>}
   );
 }
 
