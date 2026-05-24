@@ -667,8 +667,8 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
     </div>;})}
     </div>
     <div className="invest-note">💡 แตะการ์ด → เลือกเดือน → ใส่จำนวน → เลือกเป้าหมายที่จะนับรวมได้ด้วย</div>
-    {editRecState&&<EditRecSheet editRec={editRecState.rec} optColor={editRecState.color} onSave={(updated)=>{handleSave(editRecState.optId,editRecState.month,updated);setEditRecState(null);}} onClose={()=>setEditRecState(null)}/>}
-      {openOpt&&<InvestSheet opt={openOpt} selMonth={selMonth} savings={savings} onSave={handleSave} onClose={()=>setOpenOpt(null)} goals={goals} onDepositGoal={onDepositGoal} onEditRec={(r,mo)=>setEditRecState({rec:r,optId:openOpt.id,month:mo!==undefined?mo:selMonth,color:openOpt.color})}/>}
+    {console.log('editRecState:',editRecState)}{editRecState&&<EditRecSheet editRec={editRecState.rec} optColor={editRecState.color} onSave={(updated)=>{handleSave(editRecState.optId,editRecState.month,updated);setEditRecState(null);}} onClose={()=>setEditRecState(null)}/>}
+      {openOpt&&<InvestSheet opt={openOpt} selMonth={selMonth} savings={savings} onSave={handleSave} onClose={()=>setOpenOpt(null)} goals={goals} onDepositGoal={onDepositGoal} onEditRec={(r,mo)=>{console.log('editRec clicked',r,mo);setEditRecState({rec:r,optId:openOpt.id,month:mo!==undefined?mo:selMonth,color:openOpt.color});}}/>}
   </div>;
 }
 
