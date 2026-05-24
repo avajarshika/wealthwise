@@ -427,8 +427,36 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
       </div>
       {m.income>0&&<div className="flow-bar-wrap"><div className="flow-bar"><div className="flow-seg flow-exp" style={{width:`${expPct}%`}}/><div className="flow-seg flow-tax" style={{width:`${Math.min((taxMo/m.income)*100,100)}%`}}/></div><div className="flow-legend"><span><span className="fleg exp"/> ค่าใช้จ่าย {Math.round(expPct)}%</span><span><span className="fleg tax"/> ภาษีประมาณ</span></div></div>}
     </div>
-    <div className="sec-hd"><span>💰 รายได้เดือนนี้</span><button className="sec-add" onClick={()=>setSheet("income")}>{m.income>0?"แก้ไข":"+ เพิ่ม"}</button></div>
-    {m.income===0?<div className="empty-card" onClick={()=>setSheet("income")}>แตะเพื่อบันทึกรายได้เดือนนี้ →</div>:<div className="income-card"><span className="ic-emoji">💰</span><div><div className="ic-label">รายได้รวม</div><div className="ic-amt">{fmt(m.income)} บาท</div></div></div>}
+    <div className="sec-hd">
+      <span>💰 รายได้เดือนนี้</span>
+      <button className="sec-add" onClick={()=>setSheet("income")}>+ เพิ่มรายได้</button>
+    </div>
+    {totalInc===0
+      ?<div className="empty-card" onClick={()=>setSheet("income")}>แตะเพื่อบันทึกรายได้ เช่น งานออกแบบ ถ่ายภาพ →</div>
+      :<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:8}}>
+        {(m.incomes&&m.incomes.length>0)?m.incomes.map(inc=>(
+          <div key={inc.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,background:"#F0FFF4",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>💰</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#2C2510"}}>{inc.desc||"รายได้"}</div>
+              <div style={{fontSize:11,color:"#A89660",marginTop:2}}>{inc.date}</div>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:"#4A7C3F"}}>+{fmt(inc.amount)} ฿</div>
+            <button className="del-btn" onClick={()=>delIncome(inc.id,inc.amount)}>🗑</button>
+          </div>
+        )):(
+          <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,background:"#F0FFF4",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>💰</div>
+            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#2C2510"}}>รายได้</div></div>
+            <div style={{fontSize:15,fontWeight:800,color:"#4A7C3F"}}>+{fmt(m.income)} ฿</div>
+          </div>
+        )}
+        <div style={{background:"#F0FFF4",border:"1.5px solid #B8D89A",borderRadius:11,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>รวมรายได้เดือนนี้</span>
+          <span style={{fontSize:16,fontWeight:800,color:"#4A7C3F"}}>{fmt(totalInc)} ฿</span>
+        </div>
+      </div>
+    }
     <div className="sec-hd"><span>📤 ค่าใช้จ่าย</span><button className="sec-add" onClick={()=>setSheet("expense")}>+ เพิ่ม</button></div>
     {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
     {totalInc>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
