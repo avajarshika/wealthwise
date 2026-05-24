@@ -297,6 +297,65 @@ function AddSheet({title,onSave,onClose,hasCategory,isIncome}) {
 }
 
 
+
+// ── EditIncomeSheet ───────────────────────────────────────────────────
+function EditIncomeSheet({entry, onSave, onClose}) {
+  const [desc, setDesc] = useState(entry.desc||"");
+  const [amount, setAmount] = useState(String(entry.amount||""));
+  const save = () => {
+    if(!amount) return;
+    onSave({...entry, desc: desc||"รายได้", amount: parseFloat(amount)});
+    onClose();
+  };
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">✏️ แก้ไขรายได้</div>
+        <label className="ish-sec-label">ชื่อรายได้</label>
+        <input className="sinp" placeholder="เช่น งานออกแบบ Logo" value={desc} onChange={e=>setDesc(e.target.value)}/>
+        <label className="ish-sec-label">จำนวนเงิน (บาท)</label>
+        <input className="sinp sinp-lg" type="number" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={onClose}>ยกเลิก</button>
+          <button className="sbtn-s" onClick={save}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── EditExpenseSheet ──────────────────────────────────────────────────
+function EditExpenseSheet({entry, onSave, onClose}) {
+  const [desc, setDesc] = useState(entry.desc||"");
+  const [amount, setAmount] = useState(String(entry.amount||""));
+  const [cat, setCat] = useState(entry.cat||EXPENSE_CATS[0]);
+  const save = () => {
+    if(!amount) return;
+    onSave({...entry, desc: desc||cat, amount: parseFloat(amount), cat});
+    onClose();
+  };
+  return (
+    <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">✏️ แก้ไขค่าใช้จ่าย</div>
+        <div className="cat-scroll" style={{marginBottom:10}}>
+          {EXPENSE_CATS.map(c=><button key={c} className={`cat-chip ${cat===c?"cat-on":""}`} onClick={()=>setCat(c)}>{c}</button>)}
+        </div>
+        <label className="ish-sec-label">รายละเอียด</label>
+        <input className="sinp" placeholder="รายละเอียด (ไม่บังคับ)" value={desc} onChange={e=>setDesc(e.target.value)}/>
+        <label className="ish-sec-label">จำนวนเงิน (บาท)</label>
+        <input className="sinp sinp-lg" type="number" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={onClose}>ยกเลิก</button>
+          <button className="sbtn-s" onClick={save}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── DocAddSheet — rich document form ─────────────────────────────────
 function DocAddSheet({monthIdx, onSave, onClose}) {
   const [company, setCompany]   = useState("");
@@ -395,6 +454,8 @@ function DocAddSheet({monthIdx, onSave, onClose}) {
 
 function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
+  const [editIncEntry,setEditIncEntry]=useState(null);
+  const [editExpEntry,setEditExpEntry]=useState(null);
   const docs=docsState||Array.from({length:12},()=>[]);
   const [showDocSheet,setShowDocSheet]=useState(false);
   const docRef=useRef();
@@ -407,11 +468,19 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
     setData(d=>d.map((r,i)=>i===sel?{...r,incomes:[...(r.incomes||[]),newEntry]}:r));
     if(saveIncomeEntry)saveIncomeEntry(sel,newEntry);
   };
+  const updateIncome=(updated)=>{
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).map(e=>e.id===updated.id?updated:e)}:r));
+    if(saveIncomeEntry)saveIncomeEntry(sel,updated);
+  };
   const delIncome=(id,amount)=>{
     setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id)}:r));
     if(userId)supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
   };
   const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
+  const updateExp=(updated)=>{
+    setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.map(e=>e.id===updated.id?updated:e)}:r));
+    if(userId)supabase.from('expenses').update({name:updated.desc,amount:updated.amount,cat:updated.cat}).eq('id',updated.id).eq('user_id',userId);
+  };
   const delExp=async id=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:r.expenses.filter(e=>e.id!==id)}:r));if(userId){await supabase.from('expenses').delete().eq('id',id).eq('user_id',userId);}};
   const expPct=Math.min((totalExp/Math.max(m.income,1))*100,100);
   return <div className="tab-content">
@@ -442,6 +511,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
               <div style={{fontSize:11,color:"#A89660",marginTop:2}}>{inc.date}</div>
             </div>
             <div style={{fontSize:15,fontWeight:800,color:"#4A7C3F"}}>+{fmt(inc.amount)} ฿</div>
+            <button className="del-btn" style={{marginRight:2}} onClick={()=>setEditIncEntry(inc)}>✏️</button>
             <button className="del-btn" onClick={()=>delIncome(inc.id,inc.amount)}>🗑</button>
           </div>
         )):(
@@ -458,7 +528,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
       </div>
     }
     <div className="sec-hd"><span>📤 ค่าใช้จ่าย</span><button className="sec-add" onClick={()=>setSheet("expense")}>+ เพิ่ม</button></div>
-    {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
+    {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" style={{marginRight:2}} onClick={()=>setEditExpEntry(e)}>✏️</button><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
     {totalInc>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
     {/* ── เอกสารรายได้ ── */}
     <div className="sec-hd" style={{marginTop:4}}>
@@ -488,6 +558,8 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
       </div>
     }
     {showDocSheet&&<DocAddSheet monthIdx={sel} onSave={doc=>{setDocsState(prev=>prev.map((arr,i)=>i===sel?[...arr,doc]:arr));if(saveDocToDB)saveDocToDB(sel,doc);}} onClose={()=>setShowDocSheet(false)}/>}
+    {editIncEntry&&<EditIncomeSheet entry={editIncEntry} onSave={updated=>{updateIncome(updated);setEditIncEntry(null);}} onClose={()=>setEditIncEntry(null)}/>}
+    {editExpEntry&&<EditExpenseSheet entry={editExpEntry} onSave={updated=>{updateExp(updated);setEditExpEntry(null);}} onClose={()=>setEditExpEntry(null)}/>}
     {sheet&&<AddSheet title={sheet==="income"?"+ เพิ่มรายได้":"เพิ่มค่าใช้จ่าย"} hasCategory={sheet==="expense"} isIncome={sheet==="income"} onSave={sheet==="income"?addIncome:addExp} onClose={()=>setSheet(null)}/>}
   </div>;
 }
