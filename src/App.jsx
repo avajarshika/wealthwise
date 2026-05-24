@@ -607,7 +607,7 @@ function InvestSheet({opt,selMonth,savings,onSave,onClose,goals,onDepositGoal,on
       <div className="ish-sec-label">เลือกเดือน</div>
       <div className="ish-months">{MONTHS_TH.map((mo,i)=>{const has=(savings[opt.id]?.[i]||[]).length>0;return <button key={i} className={`ish-mo ${month===i?"ish-mo-on":""}`} style={month===i?{background:opt.color,borderColor:opt.color}:{}} onClick={()=>setMonth(i)}>{mo}{has&&<span className="ish-mo-dot"/>}</button>;})}</div>
       <div className="ish-sec-label">{MONTH_FULL[month]} — บันทึก{opt.label}</div>
-      {existing.length>0?<div className="ish-records">{existing.map(r=><div className="ish-rec" key={r.id}><div className="ish-rec-dot" style={{background:opt.color}}/><div className="ish-rec-info"><div className="ish-rec-note">{r.note}{r.goalId&&<span className="ish-rec-goal-tag">🌟</span>}</div><div className="ish-rec-date">{r.date}</div></div><div className="ish-rec-amt" style={{color:opt.color}}>+{fmt(r.amount)} ฿</div><button className="del-btn" style={{marginRight:2}} onClick={()=>onEditRec&&onEditRec(r)}>✏️</button><button className="del-btn" onClick={()=>del(r.id)}>🗑</button></div>)}<div className="ish-month-total">รวม{MONTHS_TH[month]} <strong style={{color:opt.color}}>{fmt(totalMo)} บาท</strong></div></div>:<div className="ish-empty">ยังไม่มีบันทึกในเดือนนี้</div>}
+      {existing.length>0?<div className="ish-records">{existing.map(r=><div className="ish-rec" key={r.id}><div className="ish-rec-dot" style={{background:opt.color}}/><div className="ish-rec-info"><div className="ish-rec-note">{r.note}{r.goalId&&<span className="ish-rec-goal-tag">🌟</span>}</div><div className="ish-rec-date">{r.date}</div></div><div className="ish-rec-amt" style={{color:opt.color}}>+{fmt(r.amount)} ฿</div><button className="del-btn" style={{marginRight:2}} onClick={()=>onEditRec&&onEditRec(r,month)}>✏️</button><button className="del-btn" onClick={()=>del(r.id)}>🗑</button></div>)}<div className="ish-month-total">รวม{MONTHS_TH[month]} <strong style={{color:opt.color}}>{fmt(totalMo)} บาท</strong></div></div>:<div className="ish-empty">ยังไม่มีบันทึกในเดือนนี้</div>}
       {/* Goal linking */}
       {goals&&goals.filter(g=>g.saved<g.target).length>0&&<div className="ish-goal-link">
         <div className="ish-goal-label">🌟 นับรวมในเป้าหมายด้วยไหม?</div>
@@ -631,7 +631,14 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
   const [openOpt,setOpenOpt]=useState(null);const [selMonth]=useState(NOW_MONTH);
   const [editRecState,setEditRecState]=useState(null);
   const handleSave=(optId,monthIdx,entry,delId)=>{
-    setSavings(prev=>{const cur=prev[optId]?.[monthIdx]||[];const upd=delId?cur.filter(r=>r.id!==delId):[...cur,entry];return {...prev,[optId]:{...(prev[optId]||{}),[monthIdx]:upd}};});
+    setSavings(prev=>{
+      const cur=prev[optId]?.[monthIdx]||[];
+      let upd;
+      if(delId) upd=cur.filter(r=>r.id!==delId);
+      else if(entry&&cur.find(r=>r.id===entry.id)) upd=cur.map(r=>r.id===entry.id?entry:r); // edit
+      else upd=[...cur,entry]; // new
+      return {...prev,[optId]:{...(prev[optId]||{}),[monthIdx]:upd}};
+    });
     if(delId&&deleteSavingFromDB) deleteSavingFromDB(delId);
     if(entry&&saveSavingToDB) saveSavingToDB(optId,monthIdx,entry);
   };
@@ -661,7 +668,7 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
     </div>
     <div className="invest-note">💡 แตะการ์ด → เลือกเดือน → ใส่จำนวน → เลือกเป้าหมายที่จะนับรวมได้ด้วย</div>
     {editRecState&&<EditRecSheet editRec={editRecState.rec} optColor={editRecState.color} onSave={(updated)=>{handleSave(editRecState.optId,editRecState.month,updated);setEditRecState(null);}} onClose={()=>setEditRecState(null)}/>}
-      {openOpt&&<InvestSheet opt={openOpt} selMonth={selMonth} savings={savings} onSave={handleSave} onClose={()=>setOpenOpt(null)} goals={goals} onDepositGoal={onDepositGoal} onEditRec={(r)=>setEditRecState({rec:r,optId:openOpt.id,month:selMonth,color:openOpt.color})}/>}
+      {openOpt&&<InvestSheet opt={openOpt} selMonth={selMonth} savings={savings} onSave={handleSave} onClose={()=>setOpenOpt(null)} goals={goals} onDepositGoal={onDepositGoal} onEditRec={(r,mo)=>setEditRecState({rec:r,optId:openOpt.id,month:mo!==undefined?mo:selMonth,color:openOpt.color})}/>}
   </div>;
 }
 
