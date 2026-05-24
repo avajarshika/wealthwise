@@ -567,6 +567,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
 // ── Invest Sheet (with goal linking) ────────────────────────────────
 function InvestSheet({opt,selMonth,savings,onSave,onClose,goals,onDepositGoal}) {
   const [month,setMonth]=useState(selMonth);const [amount,setAmount]=useState("");const [note,setNote]=useState("");const [linkedGoal,setLinkedGoal]=useState(null);
+  const [editRec,setEditRec]=useState(null);
   const existing=savings[opt.id]?.[month]||[];const totalMo=existing.reduce((s,r)=>s+r.amount,0);
   const save=()=>{
     if(!amount)return;
@@ -800,6 +801,21 @@ function GoalDetailSheet({goal, onDeposit, onDeleteDeposit, onClose}) {
         <button className="sbtn-c" style={{width:"100%",marginTop:4}} onClick={onClose}>ปิด</button>
       </div>
     </div>
+    {editRec&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setEditRec(null);}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">✏️ แก้ไขรายการ</div>
+        <input className="sinp" placeholder="หมายเหตุ" defaultValue={editRec.note} onChange={e=>setEditRec(r=>({...r,note:e.target.value}))}/>
+        <input className="sinp sinp-lg" type="number" defaultValue={editRec.amount} onChange={e=>setEditRec(r=>({...r,amount:parseFloat(e.target.value)}))}/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={()=>setEditRec(null)}>ยกเลิก</button>
+          <button className="sbtn-s" style={{background:opt.color}} onClick={()=>{
+            onSave(opt.id,month,editRec);
+            setEditRec(null);
+          }}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>}
   );
 }
 
