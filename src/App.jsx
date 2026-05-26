@@ -102,6 +102,357 @@ function calcCorpTax(revenue) {
   return {profit, corpTax, salaryTax, salary, totalTax, tax:corpTax, taxable:profit, monthly:totalTax/12};
 }
 
+// ── Thai Tax Constants ────────────────────────────────────────────
+const TAX_DEDUCTIONS = {
+  personal: 60000,
+  child: 30000,
+  lifeInsurance: { max: 100000 },
+  healthInsurance: { max: 25000 },
+  rmf: { pct: 0.30, max: 500000 },
+  ssf: { pct: 0.30, max: 200000 },
+  socialSecurity: 9000,
+  homeLoan: { max: 100000 },
+};
+
+function calcAdvancedTax(income, deductions = {}) {
+  const {
+    lifeInsurance = 0, healthInsurance = 0, rmf = 0, ssf = 0,
+    socialSecurity = 9000, homeLoan = 0, children = 0,
+  } = deductions;
+  const expFlat40_2 = Math.min(income * 0.5, 100000);
+  const expFlat40_6 = income * 0.3;
+  const expFlat40_8 = income * 0.6;
+  const personalDeduct = TAX_DEDUCTIONS.personal +
+    Math.min(lifeInsurance, TAX_DEDUCTIONS.lifeInsurance.max) +
+    Math.min(healthInsurance, TAX_DEDUCTIONS.healthInsurance.max) +
+    Math.min(rmf, income * TAX_DEDUCTIONS.rmf.pct, TAX_DEDUCTIONS.rmf.max) +
+    Math.min(ssf, income * TAX_DEDUCTIONS.ssf.pct, TAX_DEDUCTIONS.ssf.max) +
+    Math.min(socialSecurity, TAX_DEDUCTIONS.socialSecurity) +
+    Math.min(homeLoan, TAX_DEDUCTIONS.homeLoan.max) +
+    children * TAX_DEDUCTIONS.child;
+  function calcTaxFromTaxable(taxable) {
+    const t = Math.max(0, taxable);
+    const brackets = [[150000,0],[150000,.05],[200000,.1],[250000,.15],[250000,.2],[Infinity,.25]];
+    let tax = 0, rem = t;
+    for (const [lim, rate] of brackets) { if (rem <= 0) break; tax += Math.min(rem, lim) * rate; rem -= lim; }
+    return tax;
+  }
+  const results = {
+    "40(2)": { article:"40(2)", desc:"รับจ้างทำงาน", expense:expFlat40_2, taxable:Math.max(0,income-expFlat40_2-personalDeduct), tax:calcTaxFromTaxable(Math.max(0,income-expFlat40_2-personalDeduct)) },
+    "40(6)": { article:"40(6)", desc:"วิชาชีพอิสระ", expense:expFlat40_6, taxable:Math.max(0,income-expFlat40_6-personalDeduct), tax:calcTaxFromTaxable(Math.max(0,income-expFlat40_6-personalDeduct)) },
+    "40(8)": { article:"40(8)", desc:"ฟรีแลนซ์ทั่วไป", expense:expFlat40_8, taxable:Math.max(0,income-expFlat40_8-personalDeduct), tax:calcTaxFromTaxable(Math.max(0,income-expFlat40_8-personalDeduct)) },
+  };
+  const best = Object.values(results).reduce((a, b) => a.tax <= b.tax ? a : b);
+  return { results, best, personalDeduct };
+}
+
+// ── Annual Dashboard ──────────────────────────────────────────────
+function AnnualDashboard({ data, docsState }) {
+  const [showTaxDetail, setShowTaxDetail] = useState(false);
+  const [article, setArticle] = useState("40(8)");
+  const [deductions, setDeductions] = useState({ lifeInsurance:0, healthInsurance:0, rmf:0, ssf:0, socialSecurity:9000, homeLoan:0, children:0 });
+  const totalInc = data.reduce((s,d)=>s+(d.incomes?.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);
+  const totalExp = data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+  const clientMap = {};
+  data.forEach(m=>(m.incomes||[]).forEach(inc=>{const k=inc.desc||"รายได้อื่นๆ";clientMap[k]=(clientMap[k]||0)+inc.amount;}));
+  const topClients = Object.entries(clientMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const { best } = calcAdvancedTax(totalInc, deductions);
+  const taxReserve = best.tax;
+  const taxMonthly = Math.round(taxReserve / 12);
+  const monthsPassed = new Date().getMonth() + 1;
+  const expectedInc = totalInc > 0 ? Math.round((totalInc / monthsPassed) * 12) : 0;
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{background:"linear-gradient(135deg,#2C2510,#4A3E22)",borderRadius:20,padding:20,marginBottom:12,border:"1.5px solid #E8B84B33"}}>
+        <div style={{fontSize:10,color:"#E8B84B",fontWeight:800,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📊 แดชบอร์ดปี {YEAR_TH}</div>
+        <div style={{fontSize:28,fontWeight:800,color:"#FFF3C4",marginBottom:4}}>{fmt(totalInc)} <span style={{fontSize:14,color:"#A89660"}}>บาท</span></div>
+        <div style={{fontSize:11,color:"#A89660",marginBottom:16}}>รายได้รวม {monthsPassed} เดือน · คาดทั้งปี ~{fmt(expectedInc)} ฿</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          {[{label:"ค่าใช้จ่าย",val:fmt(totalExp),color:"#FF9090"},{label:"ภาษีประมาณ",val:fmt(taxReserve),color:"#FFD060"},{label:"กันไว้/เดือน",val:fmt(taxMonthly),color:"#90D080"}].map(s=>(
+            <div key={s.label} style={{background:"#FFFFFF11",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#A89660",marginBottom:4}}>{s.label}</div>
+              <div style={{fontSize:14,fontWeight:800,color:s.color}}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:12,padding:"10px 12px",background:"#FFD06022",borderRadius:10,border:"1px solid #FFD06044"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <span style={{fontSize:11,color:"#FFD060",fontWeight:700}}>💡 ควรกันเงินภาษีไว้</span>
+            <span style={{fontSize:13,fontWeight:800,color:"#FFD060"}}>{fmt(taxReserve)} ฿</span>
+          </div>
+          <div style={{fontSize:10,color:"#A89660"}}>มาตรา {article} · เดือนละ ~{fmt(taxMonthly)} ฿</div>
+        </div>
+      </div>
+      {topClients.length>0&&(
+        <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:800,color:"#2C2510",marginBottom:10}}>💼 แหล่งรายได้หลัก</div>
+          {topClients.map(([name,amt],i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{width:26,height:26,borderRadius:8,background:"#FFF3C4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#E8B84B",flexShrink:0}}>{i+1}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#2C2510",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
+                <div style={{height:4,background:"#F5EFE0",borderRadius:2,marginTop:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",borderRadius:2,background:"#E8B84B",width:`${(amt/topClients[0][1])*100}%`}}/>
+                </div>
+              </div>
+              <div style={{fontSize:13,fontWeight:800,color:"#4A7C3F",flexShrink:0,minWidth:70,textAlign:"right"}}>{fmt(amt)} ฿</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={()=>setShowTaxDetail(v=>!v)} style={{width:"100%",background:showTaxDetail?"#FFF8DC":"#FFF",border:`1.5px solid ${showTaxDetail?"#E8B84B":"#EDE8D8"}`,borderRadius:showTaxDetail?"14px 14px 0 0":14,padding:"12px 14px",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:18}}>🧾</span>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#2C2510"}}>ปรับค่าลดหย่อน Real-time</div>
+            <div style={{fontSize:10,color:"#A89660",marginTop:1}}>มาตรา 40(2)/40(6)/40(8) · RMF/SSF</div>
+          </div>
+        </div>
+        <span style={{color:"#E8B84B",fontWeight:700}}>{showTaxDetail?"▲":"▼"}</span>
+      </button>
+      {showTaxDetail&&(
+        <div style={{background:"#FFF8DC",border:"1.5px solid #E8B84B44",borderRadius:"0 0 14px 14px",padding:14,marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#B8860B",marginBottom:8}}>เลือกมาตราที่ใช้</div>
+          <div style={{display:"flex",gap:6,marginBottom:12}}>
+            {["40(2)","40(6)","40(8)"].map(a=>(
+              <button key={a} onClick={()=>setArticle(a)} style={{flex:1,padding:"8px 4px",borderRadius:10,border:`1.5px solid ${article===a?"#E8B84B":"#EDE8D8"}`,background:article===a?"#E8B84B":"#FFF",color:article===a?"#2C2510":"#A89660",fontWeight:800,fontSize:11,cursor:"pointer",fontFamily:"'Sarabun',sans-serif"}}>{a}</button>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {[
+              {key:"lifeInsurance",label:"ประกันชีวิต",max:100000},
+              {key:"healthInsurance",label:"ประกันสุขภาพ",max:25000},
+              {key:"rmf",label:"RMF",max:Math.min(totalInc*0.3,500000)},
+              {key:"ssf",label:"SSF",max:Math.min(totalInc*0.3,200000)},
+              {key:"homeLoan",label:"ดอกเบี้ยบ้าน",max:100000},
+              {key:"children",label:"บุตร (คน)",max:10},
+            ].map(f=>(
+              <div key={f.key}>
+                <div style={{fontSize:10,color:"#B8860B",fontWeight:700,marginBottom:3}}>{f.label} <span style={{color:"#A89660",fontWeight:400}}>(max {f.key==="children"?f.max:fmt(f.max)})</span></div>
+                <input type="number" min="0" max={f.max} value={deductions[f.key]||""} onChange={e=>setDeductions(d=>({...d,[f.key]:parseFloat(e.target.value)||0}))} placeholder={f.key==="children"?"จำนวนคน":"0"} style={{width:"100%",padding:"8px 10px",border:"1.5px solid #E8B84B66",borderRadius:9,fontSize:13,fontFamily:"'Sarabun',sans-serif",background:"#FFF",color:"#2C2510",outline:"none"}}/>
+              </div>
+            ))}
+          </div>
+          <div style={{marginTop:12,background:"#FFF",borderRadius:12,padding:12}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#2C2510",marginBottom:8}}>เปรียบเทียบทุกมาตรา</div>
+            {(()=>{
+              const {results,best}=calcAdvancedTax(totalInc,deductions);
+              return Object.values(results).map(r=>(
+                <div key={r.article} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:9,marginBottom:6,background:r.article===best.article?"#F0FFF4":"#F5EFE0",border:`1.5px solid ${r.article===best.article?"#B8D89A":"#EDE8D8"}`}}>
+                  <div>
+                    <span style={{fontSize:12,fontWeight:800,color:"#2C2510"}}>มาตรา {r.article}</span>
+                    {r.article===best.article&&<span style={{marginLeft:6,fontSize:9,fontWeight:800,background:"#4A7C3F",color:"#FFF",padding:"2px 6px",borderRadius:10}}>ดีสุด ✓</span>}
+                    <div style={{fontSize:10,color:"#A89660"}}>หักค่าใช้จ่าย {fmt(r.expense)} ฿</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:15,fontWeight:800,color:r.article===best.article?"#4A7C3F":"#C04848"}}>{fmt(r.tax)} ฿</div>
+                    <div style={{fontSize:10,color:"#A89660"}}>ภาษี</div>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tax Calendar & Reminder ───────────────────────────────────────
+function TaxCalendar({ totalInc }) {
+  const month = new Date().getMonth();
+  const reminders = [
+    { id:"pnd94", title:"ยื่น ภ.ง.ด.94", subtitle:"รายได้ครึ่งปีแรก (ม.ค.–มิ.ย.)", deadline:"กันยายน – ตุลาคม", color:"#E8B84B", icon:"📋", desc:"ฟรีแลนซ์ที่มีรายได้ 40(2)(3)(6)(7) ต้องยื่นภาษีกลางปี", urgent: month>=7&&month<=9 },
+    { id:"pnd90", title:"ยื่น ภ.ง.ด.90", subtitle:"รายได้ทั้งปีที่แล้ว", deadline:"มกราคม – มีนาคม", color:"#5BA3D9", icon:"📝", desc:"ยื่นภาษีประจำปี รายได้ทุกประเภท ยื่นออนไลน์ที่ efiling.rd.go.th", urgent: month<=2 },
+    { id:"vat", title:"จด VAT (ถ้ารายได้ > 1.8M)", subtitle:"ลงทะเบียนภาษีมูลค่าเพิ่ม", deadline:"เมื่อรายได้เกิน 1,800,000 ฿", color:"#7A4FA0", icon:"🏢", desc: totalInc>=1800000?"⚠️ รายได้ของคุณเกิน 1.8 ล้าน — ควรจด VAT แล้ว!":"รายได้ยังไม่ถึงเกณฑ์ VAT", urgent: totalInc>=1800000 },
+  ];
+  return (
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+      <div style={{fontSize:13,fontWeight:800,color:"#2C2510",marginBottom:10}}>🗓 ปฏิทินภาษีสำคัญ</div>
+      {reminders.map(r=>(
+        <div key={r.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:12,marginBottom:8,background:r.urgent?r.color+"15":"#F5EFE0",border:`1.5px solid ${r.urgent?r.color+"66":"#EDE8D8"}`}}>
+          <span style={{fontSize:20,flexShrink:0}}>{r.icon}</span>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#2C2510"}}>{r.title}</div>
+              {r.urgent&&<span style={{fontSize:9,fontWeight:800,background:r.color,color:"#2C2510",padding:"2px 7px",borderRadius:10,flexShrink:0,marginLeft:6}}>ใกล้ถึงกำหนด!</span>}
+            </div>
+            <div style={{fontSize:11,color:"#A89660",marginTop:2}}>{r.subtitle}</div>
+            <div style={{fontSize:11,fontWeight:700,color:r.color,marginTop:2}}>📅 {r.deadline}</div>
+            <div style={{fontSize:11,color:"#6B5E3C",marginTop:3,lineHeight:1.5}}>{r.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Withholding Tax (ใบ 50 ทวิ) ──────────────────────────────────
+function WithholdingTaxSummary({ data, docsState }) {
+  const withholdingDocs = [];
+  (docsState||[]).forEach((monthDocs,mi)=>{
+    (monthDocs||[]).forEach(doc=>{
+      if(doc.docType&&(doc.docType.includes("50")||doc.docType.includes("หัก")||doc.docType.includes("ทวิ")))
+        withholdingDocs.push({...doc,monthIdx:mi});
+    });
+  });
+  const totalInc = data.reduce((s,d)=>s+(d.incomes?.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);
+  const estimatedWHT = Math.round(totalInc*0.03);
+  return (
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:800,color:"#2C2510"}}>🧾 ใบหัก ณ ที่จ่าย (50 ทวิ)</div>
+        <div style={{fontSize:11,fontWeight:700,color:"#7A4FA0"}}>{withholdingDocs.length} ใบ</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <div style={{background:"#F5F0FF",borderRadius:12,padding:10}}>
+          <div style={{fontSize:10,color:"#7A4FA0",fontWeight:700}}>ยอดถูกหัก (ประมาณ 3%)</div>
+          <div style={{fontSize:16,fontWeight:800,color:"#7A4FA0",marginTop:2}}>{fmt(estimatedWHT)} ฿</div>
+          <div style={{fontSize:10,color:"#A89660",marginTop:2}}>นำไปหักจากภาษีได้</div>
+        </div>
+        <div style={{background:"#F0FFF4",borderRadius:12,padding:10}}>
+          <div style={{fontSize:10,color:"#4A7C3F",fontWeight:700}}>เก็บเอกสารแล้ว</div>
+          <div style={{fontSize:16,fontWeight:800,color:"#4A7C3F",marginTop:2}}>{withholdingDocs.length} ฉบับ</div>
+          <div style={{fontSize:10,color:"#A89660",marginTop:2}}>จากแท็บ "การเงิน"</div>
+        </div>
+      </div>
+      {withholdingDocs.length>0
+        ? withholdingDocs.slice(0,3).map((doc,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"#F5EFE0",borderRadius:9,marginBottom:5}}>
+            <span style={{fontSize:16}}>🧾</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>{doc.company||doc.docType||"ใบหัก ณ ที่จ่าย"}</div>
+              <div style={{fontSize:10,color:"#A89660"}}>{MONTH_FULL[doc.monthIdx]} · {doc.date}</div>
+            </div>
+          </div>
+        ))
+        : <div style={{textAlign:"center",padding:"12px 0",color:"#C4B88A",fontSize:12}}>ยังไม่มีใบ 50 ทวิ · เพิ่มในแท็บ "การเงิน" → เอกสาร</div>
+      }
+      {withholdingDocs.length>3&&<div style={{fontSize:11,color:"#A89660",textAlign:"center",paddingTop:4}}>+ อีก {withholdingDocs.length-3} รายการ</div>}
+    </div>
+  );
+}
+
+// ── Tax Optimizer (RMF/SSF) ───────────────────────────────────────
+function TaxOptimizer({ totalInc }) {
+  const [lifeIns,setLifeIns]=useState(0);const [healthIns,setHealthIns]=useState(0);const [rmf,setRmf]=useState(0);const [ssf,setSsf]=useState(0);
+  const baseTax = calcAdvancedTax(totalInc,{}).best.tax;
+  const optimizedTax = calcAdvancedTax(totalInc,{lifeInsurance:lifeIns,healthInsurance:healthIns,rmf,ssf}).best.tax;
+  const saving = Math.max(0,baseTax-optimizedTax);
+  const maxRmf = Math.min(totalInc*0.3,500000), maxSsf = Math.min(totalInc*0.3,200000);
+  const maxSaving = Math.max(0,baseTax-calcAdvancedTax(totalInc,{lifeInsurance:100000,healthInsurance:25000,rmf:maxRmf,ssf:maxSsf}).best.tax);
+  const sliders = [
+    {label:"ประกันชีวิต",icon:"🛡️",color:"#5BA3D9",val:lifeIns,set:setLifeIns,max:100000},
+    {label:"ประกันสุขภาพ",icon:"💊",color:"#6ABF6A",val:healthIns,set:setHealthIns,max:25000},
+    {label:"RMF",icon:"📊",color:"#7A4FA0",val:rmf,set:setRmf,max:maxRmf},
+    {label:"SSF",icon:"📈",color:"#E8B84B",val:ssf,set:setSsf,max:maxSsf},
+  ];
+  return (
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:800,color:"#2C2510"}}>💎 Optimizer ลดหย่อนภาษี</div>
+          <div style={{fontSize:11,color:"#A89660",marginTop:2}}>ปรับตัวเลขเพื่อดูว่าประหยัดได้เท่าไหร่</div>
+        </div>
+        {maxSaving>0&&<div style={{background:"#F0FFF4",border:"1.5px solid #B8D89A",borderRadius:10,padding:"4px 10px",textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#4A7C3F",fontWeight:700}}>ลดได้สูงสุด</div>
+          <div style={{fontSize:14,fontWeight:800,color:"#4A7C3F"}}>{fmt(maxSaving)} ฿</div>
+        </div>}
+      </div>
+      {sliders.map(s=>(
+        <div key={s.label} style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <span style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>{s.icon} {s.label}</span>
+            <span style={{fontSize:11,fontWeight:800,color:s.color}}>{fmt(s.val)} ฿</span>
+          </div>
+          <input type="range" min="0" max={s.max} step={Math.max(1000,Math.round(s.max/100))} value={s.val} onChange={e=>s.set(parseFloat(e.target.value))} style={{width:"100%",accentColor:s.color}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#C4B88A",marginTop:2}}><span>0</span><span>max {fmt(s.max)} ฿</span></div>
+        </div>
+      ))}
+      <div style={{background:saving>0?"#F0FFF4":"#F5EFE0",border:`1.5px solid ${saving>0?"#B8D89A":"#EDE8D8"}`,borderRadius:12,padding:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontSize:11,color:"#A89660"}}>ก่อนลดหย่อน</div><div style={{fontSize:18,fontWeight:800,color:"#C04848"}}>{fmt(baseTax)} ฿</div></div>
+        <div style={{fontSize:22,color:"#E8B84B"}}>→</div>
+        <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#A89660"}}>หลังลดหย่อน</div><div style={{fontSize:18,fontWeight:800,color:saving>0?"#4A7C3F":"#2C2510"}}>{fmt(optimizedTax)} ฿</div></div>
+      </div>
+      {saving>0&&<div style={{textAlign:"center",marginTop:8,fontSize:13,fontWeight:800,color:"#4A7C3F"}}>💚 ประหยัดภาษีได้ {fmt(saving)} บาท!</div>}
+    </div>
+  );
+}
+
+// ── Tax Scenario Simulator ────────────────────────────────────────
+function TaxScenario({ currentInc }) {
+  const [extraInc,setExtraInc]=useState(50000);
+  const baseTax = calcAdvancedTax(currentInc,{}).best.tax;
+  const newTax = calcAdvancedTax(currentInc+extraInc,{}).best.tax;
+  const addedTax = newTax-baseTax;
+  const netGain = extraInc-addedTax;
+  const effectiveRate = extraInc>0?(addedTax/extraInc)*100:0;
+  return (
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+      <div style={{fontSize:13,fontWeight:800,color:"#2C2510",marginBottom:4}}>🔮 จำลอง "ถ้ารับงานเพิ่ม"</div>
+      <div style={{fontSize:11,color:"#A89660",marginBottom:12}}>ถ้ารับงานเพิ่มอีก X บาท จะเสียภาษีเพิ่มเท่าไหร่?</div>
+      <div style={{marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+          <span style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>รายได้เพิ่มขึ้น</span>
+          <span style={{fontSize:14,fontWeight:800,color:"#E8B84B"}}>{fmt(extraInc)} ฿</span>
+        </div>
+        <input type="range" min="10000" max="500000" step="10000" value={extraInc} onChange={e=>setExtraInc(parseFloat(e.target.value))} style={{width:"100%",accentColor:"#E8B84B"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#C4B88A",marginTop:2}}><span>10,000 ฿</span><span>500,000 ฿</span></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {[{label:"ภาษีเพิ่ม",val:fmt(addedTax),color:"#C04848",icon:"📤"},{label:"ได้จริง",val:fmt(netGain),color:"#4A7C3F",icon:"💚"},{label:"อัตราภาษีจริง",val:`${effectiveRate.toFixed(1)}%`,color:"#7A4FA0",icon:"📊"}].map(s=>(
+          <div key={s.label} style={{background:"#F5EFE0",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+            <div style={{fontSize:16}}>{s.icon}</div>
+            <div style={{fontSize:14,fontWeight:800,color:s.color,marginTop:2}}>{s.val}</div>
+            <div style={{fontSize:10,color:"#A89660",marginTop:2}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:10,padding:"8px 12px",background:"#F5F0FF",borderRadius:10,fontSize:12,color:"#6A4FA0",lineHeight:1.6}}>
+        💡 รับงานเพิ่ม {fmt(extraInc)} ฿ → เสียภาษีเพิ่ม {fmt(addedTax)} ฿ → <strong>ได้สุทธิ {fmt(netGain)} ฿</strong>
+      </div>
+    </div>
+  );
+}
+
+// ── Expense Deductibility Breakdown ─────────────────────────────
+function ExpenseBreakdown({ data }) {
+  const DEDUCTIBLE_KEYS = ["อุปกรณ์งาน","โทรศัพท์","พัฒนาตัวเอง","ที่พัก","เดินทาง"];
+  const NON_DEDUCTIBLE_KEYS = ["บันเทิง","เสื้อผ้า","อาหาร"];
+  let deductible=0,nonDeductible=0,other=0;
+  data.forEach(m=>m.expenses.forEach(e=>{
+    const cat=e.cat||"";
+    if(DEDUCTIBLE_KEYS.some(k=>cat.includes(k))) deductible+=e.amount;
+    else if(NON_DEDUCTIBLE_KEYS.some(k=>cat.includes(k))) nonDeductible+=e.amount;
+    else other+=e.amount;
+  }));
+  const total=deductible+nonDeductible+other;
+  return (
+    <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:16,padding:14,marginBottom:12}}>
+      <div style={{fontSize:13,fontWeight:800,color:"#2C2510",marginBottom:10}}>📦 ค่าใช้จ่าย: หักได้ vs ไม่ได้</div>
+      {[
+        {label:"หักได้ (งาน/วิชาชีพ)",amt:deductible,color:"#4A7C3F",bg:"#F0FFF4",icon:"✅"},
+        {label:"หักไม่ได้ (ส่วนตัว)",amt:nonDeductible,color:"#C04848",bg:"#FFF0F0",icon:"❌"},
+        {label:"ยังไม่จัดหมวด",amt:other,color:"#B8860B",bg:"#FFF8DC",icon:"❓"},
+      ].map(row=>(
+        <div key={row.label} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:row.bg,borderRadius:10,marginBottom:7}}>
+          <span style={{fontSize:16}}>{row.icon}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>{row.label}</div>
+            <div style={{height:4,background:"#EDE8D8",borderRadius:2,marginTop:4,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:2,background:row.color,width:`${total>0?(row.amt/total)*100:0}%`,transition:"width .4s"}}/>
+            </div>
+          </div>
+          <div style={{fontSize:14,fontWeight:800,color:row.color,flexShrink:0}}>{fmt(row.amt)} ฿</div>
+        </div>
+      ))}
+      <div style={{fontSize:11,color:"#A89660",marginTop:4,lineHeight:1.6}}>
+        💡 ค่าใช้จ่ายหมวด "อุปกรณ์งาน" หรือ "เดินทาง" มีโอกาสหักภาษีได้หากมีใบเสร็จ
+      </div>
+    </div>
+  );
+}
+
 const initData = () => Array.from({length:12},(_,i)=>({month:i,income:0,incomes:[],expenses:[]}));
 
 // ── Google Icon ──────────────────────────────────────────────────────
@@ -1197,35 +1548,83 @@ function GoalsTab({data,goals,setGoals,savings,userId,saveGoalToDB}) {
 }
 
 // ── Summary Tab ──────────────────────────────────────────────────────
-function SummaryTab({data,goals,savings,userPlan,onPaywall}) {
+function SummaryTab({data,goals,savings,userPlan,onPaywall,docsState}) {
   const totalInc=data.reduce((s,d)=>s+(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
   const {taxable,tax}=calcPersonalTax(totalInc);const net=totalInc-totalExp-tax;
   const maxInc=Math.max(...data.map(d=>(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income)),1);
   const catMap={};data.forEach(m=>m.expenses.forEach(e=>{const k=e.cat||"อื่นๆ";catMap[k]=(catMap[k]||0)+e.amount;}));
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const totalSaved=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
+  const [activeSection,setActiveSection]=useState("overview");
+  const sections=[{id:"overview",label:"ภาพรวม",icon:"📊"},{id:"tax",label:"ภาษี",icon:"🧾"},{id:"optimize",label:"ลดหย่อน",icon:"💎"},{id:"docs",label:"เอกสาร",icon:"📎"}];
   return <div className="tab-content">
-    <div className="sum-hero">
-      <div className="sh-eye">ภาพรวมปี {YEAR_TH}</div>
-      <div className="sh-big">{fmt(totalInc)}<span className="sh-unit"> บาท</span></div>
-      <div className="sh-divider"/>
-      <div className="sh-rows">
-        <div className="sh-row"><span>ค่าใช้จ่ายรวม</span><span className="shr-neg">−{fmt(totalExp)} ฿</span></div>
-        <div className="sh-row"><span>ภาษีประมาณ</span><span className="shr-neg">−{fmt(tax)} ฿</span></div>
-        <div className="sh-row"><span>ออม/ลงทุน</span><span style={{color:"#90D080",fontWeight:700}}>−{fmt(totalSaved)} ฿</span></div>
-        <div className="sh-row sh-bold"><span>เงินคงเหลือจริง</span><span style={{color:"#FFF3C4"}}>{fmt(Math.max(0,net-totalSaved))} ฿</span></div>
-      </div>
+    {/* Section tabs */}
+    <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
+      {sections.map(s=>(
+        <button key={s.id} onClick={()=>setActiveSection(s.id)} style={{flexShrink:0,padding:"7px 13px",borderRadius:20,border:`1.5px solid ${activeSection===s.id?"#E8B84B":"#EDE8D8"}`,background:activeSection===s.id?"#FFF3C4":"#FFF",color:activeSection===s.id?"#B8860B":"#A89660",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"'Sarabun',sans-serif",display:"flex",alignItems:"center",gap:4}}>
+          <span>{s.icon}</span>{s.label}
+        </button>
+      ))}
     </div>
-    <div className={`tax-res ${tax===0?"tr-safe":"tr-warn"}`}><div className="tr-label">ภาษีที่ต้องจ่ายปีนี้</div><div className="tr-val">{tax===0?"ไม่ต้องจ่าย 🎉":`${fmt(tax)} บาท`}</div><div className="tr-note">{tax===0?"แต่ยังต้องยื่นแบบถ้ารายได้ > 60,000 บ./ปี":"ยื่นออนไลน์ที่ efiling.rd.go.th ภายในมีนาคม"}</div></div>
-    <div className="sec-hd2">รายได้รายเดือน</div>
-    <div className="mo-bars">{data.map((d,i)=>{const t=(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income);const pct=(t/maxInc)*100;return <div className="mob-row" key={i}><div className="mob-label">{MONTHS_TH[i]}</div><div className="mob-track"><div className="mob-inc" style={{width:`${pct}%`}}/><div className="mob-exp" style={{width:`${Math.min((d.expenses.reduce((s,e)=>s+e.amount,0)/Math.max(t,1))*100,100)}%`}}/></div><div className="mob-val">{t>0?`${fmtK(t)} ฿`:"—"}</div></div>;})}</div>
-    {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
-    {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
-    <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
-    <button onClick={()=>{if(userPlan==="free"){onPaywall&&onPaywall("Export รายงาน PDF");}else{}}} style={{width:"100%",background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>📄</span><div style={{textAlign:"left"}}><div style={{fontSize:14,fontWeight:800,color:"#2C2510"}}>Export รายงานปี {YEAR_TH}</div><div style={{fontSize:11,color:"#A89660",marginTop:2}}>{userPlan==="free"?"🔒 ต้องการแพ็กเกจ Pro":"สร้าง PDF สรุปรายปี"}</div></div></div>
-      <span style={{fontSize:18,color:userPlan==="free"?"#C4B88A":"#E8B84B"}}>→</span>
-    </button>
+
+    {activeSection==="overview"&&<>
+      <AnnualDashboard data={data} docsState={docsState||[]}/>
+      <div className="sum-hero">
+        <div className="sh-eye">ภาพรวมปี {YEAR_TH}</div>
+        <div className="sh-big">{fmt(totalInc)}<span className="sh-unit"> บาท</span></div>
+        <div className="sh-divider"/>
+        <div className="sh-rows">
+          <div className="sh-row"><span>ค่าใช้จ่ายรวม</span><span className="shr-neg">−{fmt(totalExp)} ฿</span></div>
+          <div className="sh-row"><span>ภาษีประมาณ</span><span className="shr-neg">−{fmt(tax)} ฿</span></div>
+          <div className="sh-row"><span>ออม/ลงทุน</span><span style={{color:"#90D080",fontWeight:700}}>−{fmt(totalSaved)} ฿</span></div>
+          <div className="sh-row sh-bold"><span>เงินคงเหลือจริง</span><span style={{color:"#FFF3C4"}}>{fmt(Math.max(0,net-totalSaved))} ฿</span></div>
+        </div>
+      </div>
+      <div className="sec-hd2">รายได้รายเดือน</div>
+      <div className="mo-bars">{data.map((d,i)=>{const t=(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income);const pct=(t/maxInc)*100;return <div className="mob-row" key={i}><div className="mob-label">{MONTHS_TH[i]}</div><div className="mob-track"><div className="mob-inc" style={{width:`${pct}%`}}/><div className="mob-exp" style={{width:`${Math.min((d.expenses.reduce((s,e)=>s+e.amount,0)/Math.max(t,1))*100,100)}%`}}/></div><div className="mob-val">{t>0?`${fmtK(t)} ฿`:"—"}</div></div>;})}</div>
+      {goals&&goals.length>0&&<><div className="sec-hd2">🌟 ความคืบหน้าเป้าหมาย</div>{goals.map(g=>{const pct=Math.min((g.saved/g.target)*100,100);return <div className="sum-goal-row" key={g.id}><span style={{fontSize:20}}>{g.emoji}</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{g.name}</span><span style={{fontSize:12,color:"#A89660"}}>{Math.round(pct)}%</span></div><div className="sbc-track" style={{height:6,marginBottom:0}}><div style={{width:`${pct}%`,height:"100%",background:pct>=100?"#6ABF6A":"#E8B84B",borderRadius:3}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:11,color:"#A89660"}}>{fmt(g.saved)} ฿</span><span style={{fontSize:11,color:"#2C2510",fontWeight:700}}>{fmt(g.target)} ฿</span></div></div></div>;})}</>}
+      {cats.length>0&&<><div className="sec-hd2">ค่าใช้จ่ายตามหมวด</div><div className="cat-breakdown">{cats.map(([cat,amt])=><div className="cb-row" key={cat}><span className="cb-icon">{cat.split(" ")[0]}</span><div className="cb-info"><div className="cb-name">{cat}</div><div className="cb-bar-wrap"><div className="cb-bar" style={{width:`${(amt/cats[0][1])*100}%`}}/></div></div><span className="cb-amt">{fmt(amt)} ฿</span></div>)}</div></>}
+      <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
+      <button onClick={()=>{if(userPlan==="free"){onPaywall&&onPaywall("Export รายงาน PDF");}}} style={{width:"100%",background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"'Sarabun',sans-serif",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>📄</span><div style={{textAlign:"left"}}><div style={{fontSize:14,fontWeight:800,color:"#2C2510"}}>Export รายงานปี {YEAR_TH}</div><div style={{fontSize:11,color:"#A89660",marginTop:2}}>{userPlan==="free"?"🔒 ต้องการแพ็กเกจ Pro":"สร้าง PDF สรุปรายปี"}</div></div></div>
+        <span style={{fontSize:18,color:userPlan==="free"?"#C4B88A":"#E8B84B"}}>→</span>
+      </button>
+    </>}
+
+    {activeSection==="tax"&&<>
+      <div className={`tax-res ${tax===0?"tr-safe":"tr-warn"}`}><div className="tr-label">ภาษีที่ต้องจ่ายปีนี้</div><div className="tr-val">{tax===0?"ไม่ต้องจ่าย 🎉":`${fmt(tax)} บาท`}</div><div className="tr-note">{tax===0?"แต่ยังต้องยื่นแบบถ้ารายได้ > 60,000 บ./ปี":"ยื่นออนไลน์ที่ efiling.rd.go.th ภายในมีนาคม"}</div></div>
+      <TaxCalendar totalInc={totalInc}/>
+      <TaxScenario currentInc={totalInc}/>
+      <a href="https://efiling.rd.go.th" target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><div className="efiling-cta"><div><div className="ef-t">ยื่นภาษีออนไลน์</div><div className="ef-s">efiling.rd.go.th</div></div><span className="ef-arr">→</span></div></a>
+    </>}
+
+    {activeSection==="optimize"&&<>
+      <TaxOptimizer totalInc={totalInc}/>
+      <ExpenseBreakdown data={data}/>
+    </>}
+
+    {activeSection==="docs"&&<>
+      <WithholdingTaxSummary data={data} docsState={docsState||[]}/>
+      <div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:14,padding:14,marginBottom:12}}>
+        <div style={{fontSize:13,fontWeight:800,color:"#2C2510",marginBottom:8}}>📁 เอกสารทั้งปี</div>
+        {(docsState||[]).map((monthDocs,mi)=>monthDocs.length>0&&(
+          <div key={mi} style={{marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#B8860B",marginBottom:4}}>{MONTH_FULL[mi]}</div>
+            {monthDocs.map(d=>(
+              <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#F5EFE0",borderRadius:9,marginBottom:4}}>
+                <span style={{fontSize:14}}>{d.dataUrl?.startsWith("data:image")?"🖼️":d.dataUrl?"📄":"🔗"}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#2C2510"}}>{d.docType||"เอกสาร"}</div>
+                  {d.company&&<div style={{fontSize:10,color:"#A89660"}}>{d.company}</div>}
+                </div>
+                {d.link&&<a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:10,color:"#2E6DA4",fontWeight:700,textDecoration:"none"}}>🔗 เปิด</a>}
+              </div>
+            ))}
+          </div>
+        ))}
+        {(docsState||[]).every(m=>m.length===0)&&<div style={{textAlign:"center",padding:"14px 0",color:"#C4B88A",fontSize:12}}>ยังไม่มีเอกสาร เพิ่มได้ในแท็บ "การเงิน"</div>}
+      </div>
+    </>}
   </div>;
 }
 
@@ -1426,7 +1825,7 @@ export default function App() {
     {key:"money",  icon:"💰", label:"การเงิน"},
     {key:"plan",   icon:"🌱", label:"วางแผน"},
     {key:"goals",  icon:"🌟", label:"ความฝัน"},
-    {key:"summary",icon:"📊", label:"สรุปปี"},
+    {key:"summary",icon:"📊", label:"สรุป+ภาษี"},
   ];
   const [drawerOpen,setDrawerOpen]=useState(false);
   const [userEmail,setUserEmail]=useState(null);
@@ -1908,7 +2307,7 @@ export default function App() {
     {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB}/>}
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB} saveSavingToDB={saveSavingToDB} deleteSavingFromDB={deleteSavingFromDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
-    {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature}/>}
+    {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState}/>}
 
     </div>
     <div className="bnav">{TABS.map(b=><button key={b.key} className={`bnav-btn ${tab===b.key?"on":""}`} onClick={()=>setTab(b.key)}><span className="bnav-icon">{b.icon}</span><span className="bnav-lbl">{b.label}</span><div className="bnav-pip"/></button>)}</div>
