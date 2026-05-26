@@ -165,7 +165,7 @@ function Login({onLogin}) {
 
   return <div className="lw">
     <div className="ldeco"><div className="ldc c1"/><div className="ldc c2"/><div className="ldc c3"/></div>
-    <div className="lbrand"><div className="licon">🧾</div><div className="ltitle">{t("appName",lang)}</div><div className="lsub">{t("appSub",lang)}</div></div>
+    <div className="lbrand"><div className="licon" style={{background:"none",padding:0,width:64,height:64}}><IWealthWiseLogo size={64}/></div><div className="ltitle">{t("appName",lang)}</div><div className="lsub">{t("appSub",lang)}</div></div>
     <div className="lcard">
       <div className="lor"><div className="lorline"/><span className="lortext">{lang==="th"?"เข้าสู่ระบบด้วยอีเมล":"Sign in with email"}</span><div className="lorline"/></div>
       <div className="ltabs"><button className={`ltb ${mode==="login"?"ltb-on":""}`} onClick={()=>{setMode("login");setErr("");}}>{t("signIn",lang)}</button><button className={`ltb ${mode==="register"?"ltb-on":""}`} onClick={()=>{setMode("register");setErr("");}}>{t("register",lang)}</button></div>
@@ -1259,6 +1259,27 @@ function PaywallPopup({feature, onClose, onUpgrade}) {
   </div>;
 }
 
+function IWealthWiseLogo({size=32}) {
+  const s = size;
+  const scale = s / 32;
+  return (
+    <svg width={s} height={s} viewBox="0 0 32 32" role="img" xmlns="http://www.w3.org/2000/svg">
+      <title>iWealthWise</title>
+      <rect width="32" height="32" rx="8" fill="#FFFDF5"/>
+      <ellipse cx="16" cy="22" rx="9" ry="2.5" fill="#E8C84B"/>
+      <rect x="7" y="18" width="18" height="4" fill="#E8C84B"/>
+      <ellipse cx="16" cy="18" rx="9" ry="2.5" fill="#F5D96A"/>
+      <ellipse cx="16" cy="15.5" rx="9" ry="2.5" fill="#E0B93A"/>
+      <rect x="7" y="11.5" width="18" height="4" fill="#E0B93A"/>
+      <ellipse cx="16" cy="11.5" rx="9" ry="2.5" fill="#F0CE55"/>
+      <ellipse cx="16" cy="9" rx="9" ry="2.5" fill="#D4A830"/>
+      <rect x="7" y="5" width="18" height="4" fill="#D4A830"/>
+      <ellipse cx="16" cy="5" rx="9" ry="2.5" fill="#E8B84B"/>
+      <path d="M22 6 Q26 2 27 7 Q24 8 22 6Z" fill="#B8D89A" opacity="0.9"/>
+    </svg>
+  );
+}
+
 // ── Root App ─────────────────────────────────────────────────────────
 export default function App() {
   const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [userId,setUserId]=useState(null);const [tab,setTab]=useState("learn");
@@ -1424,7 +1445,7 @@ export default function App() {
       .hdr{background:#FFFDF5;border-bottom:1.5px solid #EDE8D8;padding:10px 16px;position:sticky;top:0;z-index:30;}
       .hdr-top{display:flex;align-items:center;justify-content:space-between;}
       .hdr-brand{display:flex;align-items:center;gap:8px;}
-      .hdr-icon{width:32px;height:32px;background:#E8B84B;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;}
+      .hdr-icon{width:32px;height:32px;background:transparent;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
       .hdr-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#2C2510;}
       .hdr-user{font-size:10px;color:#A89660;margin-top:1px;}
       .hdr-right{display:flex;align-items:center;gap:8px;}
@@ -1870,9 +1891,9 @@ export default function App() {
     <div className="hdr">
       <div className="hdr-top">
         <div className="hdr-brand">
-          <div className="hdr-icon">🧾</div>
+          <div className="hdr-icon" style={{background:"none",padding:0}}><IWealthWiseLogo size={32}/></div>
           <div>
-            <div className="hdr-name">WealthWise</div>
+            <div className="hdr-name">iWealthWise</div>
             {user&&<div className="hdr-user">สวัสดี, {user} 👋</div>}
           </div>
         </div>
