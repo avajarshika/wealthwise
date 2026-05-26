@@ -1,0 +1,22 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="100" fill="#FFFDF5"/>
+  <!-- Background glow -->
+  <circle cx="256" cy="256" r="200" fill="#FFF8DC" opacity="0.5"/>
+  <!-- Coin layer 3 -->
+  <ellipse cx="256" cy="360" rx="145" ry="40" fill="#E8C84B"/>
+  <rect x="111" y="290" width="290" height="70" fill="#E8C84B"/>
+  <ellipse cx="256" cy="290" rx="145" ry="40" fill="#F5D96A"/>
+  <!-- Coin layer 2 -->
+  <ellipse cx="256" cy="248" rx="145" ry="40" fill="#E0B93A"/>
+  <rect x="111" y="178" width="290" height="70" fill="#E0B93A"/>
+  <ellipse cx="256" cy="178" rx="145" ry="40" fill="#F0CE55"/>
+  <!-- Coin layer 1 -->
+  <ellipse cx="256" cy="136" rx="145" ry="40" fill="#D4A830"/>
+  <rect x="111" y="66" width="290" height="70" fill="#D4A830"/>
+  <ellipse cx="256" cy="66" rx="145" ry="40" fill="#E8B84B"/>
+  <!-- Leaf -->
+  <path d="M348 82 Q410 20 424 98 Q385 112 348 82Z" fill="#B8D89A" opacity="0.9"/>
+  <line x1="348" y1="82" x2="390" y2="55" stroke="#8AB870" stroke-width="4" stroke-linecap="round"/>
+  <!-- i text -->
+  <text x="140" y="460" font-family="Georgia, serif" font-size="120" font-style="italic" font-weight="600" fill="#C8A020" opacity="0.15">i</text>
+</svg>
