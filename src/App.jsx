@@ -827,7 +827,7 @@ function DocAddSheet({monthIdx, onSave, onClose}) {
   );
 }
 
-function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB,monthNotes,setMonthNotes,monthSavingsLocal,setMonthSavingsLocal}) {
+function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB,monthNotes,setMonthNotes,monthSavingsLocal,setMonthSavingsLocal,saveNoteToDB}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
   const [editIncEntry,setEditIncEntry]=useState(null);
   const [editExpEntry,setEditExpEntry]=useState(null);
@@ -947,7 +947,7 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
           style={{resize:"none",height:140,fontFamily:"'Sarabun',sans-serif",lineHeight:1.7}}/>
         <div className="sheet-btns" style={{marginTop:8}}>
           <button className="sbtn-c" onClick={()=>setShowNoteEdit(false)}>ปิด</button>
-          <button className="sbtn-s" onClick={()=>setShowNoteEdit(false)}>บันทึก ✓</button>
+          <button className="sbtn-s" onClick={()=>{setShowNoteEdit(false);if(saveNoteToDB)saveNoteToDB(sel,selNote);}}>บันทึก ✓</button>
         </div>
       </div>
     </div>}
@@ -1764,6 +1764,7 @@ export default function App() {
     // Load savings
     const {data:svdata}=await supabase.from("savings").select("*").eq("user_id",uid);
     // Load docs (metadata only, not dataUrl to save bandwidth)
+    const {data:notesdata}=await supabase.from("month_notes").select("*").eq("user_id",uid).eq("year",year);
     const {data:docsdata}=await supabase.from("docs").select("id,month_idx,name,size,date,data_url,company,doc_type,recipient,link,note").eq("user_id",uid).eq("year",year);
 
     if(mdata){
@@ -1786,6 +1787,12 @@ export default function App() {
       setSavings(sv);
     }
 
+    // Load notes
+    if(notesdata && notesdata.length>0){
+      const noteArr=Array.from({length:12},()=>"");
+      notesdata.forEach(n=>{ if(n.month_idx>=0&&n.month_idx<12) noteArr[n.month_idx]=n.note||""; });
+      setMonthNotes(noteArr);
+    }
     // Rebuild docs state: array of 12 months
     if(docsdata && docsdata.length>0){
       const docArr=Array.from({length:12},()=>[]);
@@ -1846,6 +1853,17 @@ export default function App() {
     await supabase.from("savings").delete().eq("id",id).eq("user_id",userId);
   };
 
+  const saveNoteToDB = async(monthIdx, note)=>{
+    if(!userId) return;
+    await supabase.from("month_notes").upsert({
+      user_id: userId,
+      month_idx: monthIdx,
+      year: new Date().getFullYear(),
+      note: note,
+      updated_at: new Date().toISOString(),
+    },{onConflict:"user_id,month_idx,year"});
+  };
+
   const saveDocToDB = async(monthIdx, doc)=>{
     if(!userId) return;
     await supabase.from("docs").upsert({
@@ -1882,7 +1900,7 @@ export default function App() {
   const [paywallFeature,setPaywallFeature]=useState(null);
   const [userPlan,setUserPlan]=useState("proplus"); // everyone free for now
   const depositToGoal=(goalId,dep)=>setGoals(prev=>prev.map(g=>g.id===goalId?{...g,saved:g.saved+dep.amount,deposits:[...(g.deposits||[]),dep]}:g));
-  const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setDocsState(Array.from({length:12},()=>[]));setScreen("login");};
+  const handleLogout=async()=>{await supabase.auth.signOut();setUser(null);setUserId(null);setData(initData());setGoals([]);setSavings({});setDocsState(Array.from({length:12},()=>[]));setMonthNotes(Array.from({length:12},()=>""));setScreen("login");};
   if(screen==="onboard")return <LangContext.Provider value={lang}><Shell lang={lang}><Onboarding onDone={()=>setScreen("login")}/></Shell></LangContext.Provider>;
   if(screen==="login")  return <LangContext.Provider value={lang}><Shell lang={lang}><Login onLogin={(u,uid,email)=>{setUser(u);setUserId(uid);setUserEmail(email);if(email===OWNER_EMAIL)setUserPlan("proplus");setScreen("app");if(uid)loadUserData(uid);}}/></Shell></LangContext.Provider>;
   return <LangContext.Provider value={lang}><div className="app">
@@ -2354,7 +2372,7 @@ export default function App() {
     </div>
     <div style={{paddingBottom:84,width:"100%"}}>
     {tab==="learn"  &&<LearnTab/>}
-    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB} monthNotes={monthNotes} setMonthNotes={setMonthNotes} monthSavingsLocal={monthSavingsLocal} setMonthSavingsLocal={setMonthSavingsLocal}/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB} monthNotes={monthNotes} setMonthNotes={setMonthNotes} monthSavingsLocal={monthSavingsLocal} setMonthSavingsLocal={setMonthSavingsLocal} saveNoteToDB={saveNoteToDB}/>}
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB} saveSavingToDB={saveSavingToDB} deleteSavingFromDB={deleteSavingFromDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState}/>}
