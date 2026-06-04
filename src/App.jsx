@@ -848,8 +848,17 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
     if(saveIncomeEntry)saveIncomeEntry(sel,updated);
   };
   const delIncome=(id,amount)=>{
-    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id)}:r));
-    if(userId)supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
+    setData(d=>d.map((r,i)=>{
+      if(i!==sel) return r;
+      const newIncomes=(r.incomes||[]).filter(e=>e.id!==id);
+      const newTotal=newIncomes.reduce((s,e)=>s+e.amount,0);
+      // Update monthly_data total in DB
+      if(userId){
+        supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
+        supabase.from('monthly_data').upsert({user_id:userId,month:sel,year:new Date().getFullYear(),income:newTotal},{onConflict:'user_id,month,year'});
+      }
+      return {...r,incomes:newIncomes,income:newTotal};
+    }));
   };
   const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
   const updateExp=(updated)=>{
