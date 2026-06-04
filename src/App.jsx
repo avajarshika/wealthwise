@@ -1066,8 +1066,70 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
         <div className="ph-row ph-row-bold"><span>เงินที่เหลือจริง</span><span>{fmt(afterTax)} ฿</span></div>
       </div>
     </div>
-    <div className="rule-card">
-      <div className="rule-title">📐 กฎ 50/30/20</div>
+    <div className="health-card">
+      {(()=>{
+        const totalInc=data.reduce((s,d)=>s+(d.incomes&&d.incomes.length>0?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);
+        const totalExp=data.reduce((s,d)=>s+d.expenses.reduce((ss,e)=>ss+e.amount,0),0);
+        const totalSav=Object.values(savings).flatMap(m=>Object.values(m)).flat().reduce((s,r)=>s+r.amount,0);
+        const savingRate=totalInc>0?(totalSav/totalInc)*100:0;
+        const expRate=totalInc>0?(totalExp/totalInc)*100:0;
+        const monthsWithIncome=data.filter(d=>(d.incomes&&d.incomes.length>0)||d.income>0).length;
+        // Score calculation
+        const savScore=Math.min(40, (savingRate/20)*40);
+        const expScore=expRate<50?30:expRate<70?20:expRate<90?10:0;
+        const incScore=Math.min(30,(monthsWithIncome/6)*30);
+        const score=Math.round(savScore+expScore+incScore);
+        const color=score>=80?"#4A7C3F":score>=60?"#E8B84B":score>=40?"#E8924B":"#C04848";
+        const emoji=score>=80?"💚":score>=60?"💛":score>=40?"🟠":"🔴";
+        const msgs=[
+          score>=80?"การเงินยอดเยี่ยม! รักษาไว้นะคะ 🎉":
+          score>=60?"ดีแล้ว! เพิ่มการออมอีกนิดจะดีมาก":
+          score>=40?"ควรเพิ่มการออมและลดค่าใช้จ่ายลง":
+          "ต้องปรับแผนการเงินด่วนเลยค่า!",
+          savingRate<10&&totalInc>0?"💡 ลองตั้งเป้าออม 10% ของรายได้ก่อน":"",
+          expRate>70&&totalInc>0?"💡 ค่าใช้จ่ายสูงกว่า 70% ของรายได้":"",
+          monthsWithIncome<3&&new Date().getMonth()>2?"💡 บันทึกรายได้ให้ครบทุกเดือนนะคะ":"",
+        ].filter(Boolean);
+        const circumference=2*Math.PI*54;
+        const strokeDash=(score/100)*circumference;
+        return <>
+          <div className="hc-top">
+            <div className="hc-circle-wrap">
+              <svg width="130" height="130" viewBox="0 0 130 130">
+                <circle cx="65" cy="65" r="54" fill="none" stroke="#F5EFE0" strokeWidth="10"/>
+                <circle cx="65" cy="65" r="54" fill="none" stroke={color} strokeWidth="10"
+                  strokeDasharray={`${strokeDash} ${circumference}`}
+                  strokeLinecap="round"
+                  transform="rotate(-90 65 65)"
+                  style={{transition:"stroke-dasharray .8s ease"}}/>
+                <text x="65" y="58" textAnchor="middle" fontSize="28" fontWeight="800" fill={color} fontFamily="'Playfair Display',serif">{score}</text>
+                <text x="65" y="75" textAnchor="middle" fontSize="11" fill="#A89660" fontFamily="'Sarabun',sans-serif">/100</text>
+                <text x="65" y="90" textAnchor="middle" fontSize="13" fill={color} fontFamily="'Sarabun',sans-serif">{emoji}</text>
+              </svg>
+            </div>
+            <div className="hc-right">
+              <div className="hc-title">สุขภาพการเงิน</div>
+              <div className="hc-status" style={{color}}>{score>=80?"ดีเยี่ยม":score>=60?"ดี":score>=40?"พอใช้":"ต้องปรับ"}</div>
+              <div className="hc-bars">
+                {[
+                  {label:"ออม/ลงทุน",val:Math.round(savScore),max:40,color:"#6ABF6A"},
+                  {label:"ค่าใช้จ่าย",val:Math.round(expScore),max:30,color:"#5BA3D9"},
+                  {label:"รายได้สม่ำเสมอ",val:Math.round(incScore),max:30,color:"#E8B84B"},
+                ].map(b=><div key={b.label} className="hc-bar-row">
+                  <span className="hc-bar-label">{b.label}</span>
+                  <div className="hc-bar-track"><div className="hc-bar-fill" style={{width:`${(b.val/b.max)*100}%`,background:b.color}}/></div>
+                  <span className="hc-bar-score" style={{color:b.color}}>{b.val}/{b.max}</span>
+                </div>)}
+              </div>
+            </div>
+          </div>
+          <div className="hc-divider"/>
+          <div className="hc-msgs">
+            {msgs.map((m,i)=><div key={i} className="hc-msg">{m}</div>)}
+          </div>
+        </>;
+      })()}
+    </div></div>
       <div className="rule-rows">{[{pct:50,label:"ความจำเป็น",desc:"ที่พัก อาหาร เดินทาง",color:"#E8B84B"},{pct:30,label:"ความต้องการ",desc:"ท่องเที่ยว ของฟุ่มเฟือย",color:"#5BA3D9"},{pct:20,label:"ออม/ลงทุน",desc:"กองทุน หุ้น ทองคำ",color:"#6ABF6A"}].map(r=><div className="rule-row" key={r.label}><div className="rule-bar-wrap"><div className="rule-bar-fill" style={{width:`${r.pct}%`,background:r.color}}/></div><div className="rule-info"><span className="rule-pct" style={{color:r.color}}>{r.pct}%</span><span className="rule-label">{r.label}</span><span className="rule-amt">{fmt(afterTax*r.pct/100)} ฿</span></div><div className="rule-desc">{r.desc}</div></div>)}</div>
     </div>
     {grandTotal>0&&<div className="savings-bar-card"><div className="sbc-top"><span className="sbc-label">ออม/ลงทุนสะสมปีนี้</span><span className="sbc-total">{fmt(grandTotal)} ฿</span></div><div className="sbc-track">{INVEST_OPTIONS.map(o=>{const t=totalForOpt(o.id);if(!t)return null;return <div key={o.id} className="sbc-seg" style={{width:`${(t/grandTotal)*100}%`,background:o.color}}/>;})}</div></div>}
@@ -2046,6 +2108,21 @@ export default function App() {
       .phv-inc{color:#90D080;font-weight:700;}
       .phv-exp{color:#FF9090;font-weight:700;}
       .rule-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:16px;padding:14px;margin-bottom:14px;}
+      .health-card{background:#FFF;border:1.5px solid #EDE8D8;border-radius:18px;padding:16px;margin-bottom:14px;}
+      .hc-top{display:flex;align-items:center;gap:14px;margin-bottom:12px;}
+      .hc-circle-wrap{flex-shrink:0;}
+      .hc-right{flex:1;}
+      .hc-title{font-size:11px;font-weight:800;color:#A89660;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+      .hc-status{font-size:18px;font-weight:800;margin-bottom:10px;}
+      .hc-bars{display:flex;flex-direction:column;gap:6px;}
+      .hc-bar-row{display:flex;align-items:center;gap:6px;}
+      .hc-bar-label{font-size:10px;color:#A89660;width:80px;flex-shrink:0;}
+      .hc-bar-track{flex:1;height:5px;background:#F5EFE0;border-radius:3px;overflow:hidden;}
+      .hc-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+      .hc-bar-score{font-size:10px;font-weight:700;color:#A89660;width:28px;text-align:right;flex-shrink:0;}
+      .hc-divider{border-top:1px solid #F5EFE0;margin:10px 0;}
+      .hc-msgs{display:flex;flex-direction:column;gap:5px;}
+      .hc-msg{font-size:12px;color:#6B5E3C;line-height:1.6;background:#FFFDF5;border-radius:8px;padding:7px 10px;}
       .rule-title{font-size:13px;font-weight:800;color:#2C2510;margin-bottom:10px;}
       .rule-rows{display:flex;flex-direction:column;gap:9px;}
       .rule-row{display:flex;flex-direction:column;gap:4px;}
