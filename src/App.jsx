@@ -1130,8 +1130,7 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
         </>;
       })()}
     </div></div>
-      <div className="rule-rows">{[{pct:50,label:"ความจำเป็น",desc:"ที่พัก อาหาร เดินทาง",color:"#E8B84B"},{pct:30,label:"ความต้องการ",desc:"ท่องเที่ยว ของฟุ่มเฟือย",color:"#5BA3D9"},{pct:20,label:"ออม/ลงทุน",desc:"กองทุน หุ้น ทองคำ",color:"#6ABF6A"}].map(r=><div className="rule-row" key={r.label}><div className="rule-bar-wrap"><div className="rule-bar-fill" style={{width:`${r.pct}%`,background:r.color}}/></div><div className="rule-info"><span className="rule-pct" style={{color:r.color}}>{r.pct}%</span><span className="rule-label">{r.label}</span><span className="rule-amt">{fmt(afterTax*r.pct/100)} ฿</span></div><div className="rule-desc">{r.desc}</div></div>)}</div>
-    </div>
+      
     {grandTotal>0&&<div className="savings-bar-card"><div className="sbc-top"><span className="sbc-label">ออม/ลงทุนสะสมปีนี้</span><span className="sbc-total">{fmt(grandTotal)} ฿</span></div><div className="sbc-track">{INVEST_OPTIONS.map(o=>{const t=totalForOpt(o.id);if(!t)return null;return <div key={o.id} className="sbc-seg" style={{width:`${(t/grandTotal)*100}%`,background:o.color}}/>;})}</div></div>}
     <div className="sec-hd" style={{padding:"0 0 8px"}}><span>🌱 กดการ์ดเพื่อบันทึกการออม</span></div>
     <div className="invest-list">{INVEST_OPTIONS.map(opt=>{const total=totalForOpt(opt.id);const moTotal=(savings[opt.id]?.[NOW_MONTH]||[]).reduce((s,r)=>s+r.amount,0);const hasAny=total>0;return <div className="invest-card inv-tappable" key={opt.id} style={{borderColor:hasAny?opt.color+"88":opt.color+"33"}} onClick={()=>setOpenOpt(opt)}>
