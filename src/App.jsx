@@ -827,16 +827,23 @@ function DocAddSheet({monthIdx, onSave, onClose}) {
   );
 }
 
-function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB}) {
+function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,userPlan,onPaywall,docsState,setDocsState,saveDocToDB,deleteDocFromDB,monthNotes,setMonthNotes,monthSavingsLocal,setMonthSavingsLocal}) {
   const [sel,setSel]=useState(NOW_MONTH);const [sheet,setSheet]=useState(null);
   const [editIncEntry,setEditIncEntry]=useState(null);
   const [editExpEntry,setEditExpEntry]=useState(null);
+  const [showSaveSheet,setShowSaveSheet]=useState(false);
+  const [showNoteEdit,setShowNoteEdit]=useState(false);
+  const selSavings=(monthSavingsLocal&&monthSavingsLocal[sel])||[];
+  const totalSelSavings=selSavings.reduce((s,r)=>s+r.amount,0);
+  const selNote=(monthNotes&&monthNotes[sel])||"";
   const docs=docsState||Array.from({length:12},()=>[]);
   const [showDocSheet,setShowDocSheet]=useState(false);
   const docRef=useRef();
   const m=data[sel];
   const totalInc=(m.incomes&&m.incomes.length>0)?m.incomes.reduce((s,e)=>s+e.amount,0):m.income;
-  const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);const net=totalInc-totalExp;
+  const totalExp=m.expenses.reduce((s,e)=>s+e.amount,0);
+  const _totalSelSavingsCalc=(monthSavingsLocal&&monthSavingsLocal[sel]||[]).reduce((s,r)=>s+r.amount,0);
+  const net=totalInc-totalExp-((monthSavingsLocal&&monthSavingsLocal[sel]||[]).reduce((s,r)=>s+r.amount,0));
   const annualInc=data.reduce((s,d)=>s+((d.incomes&&d.incomes.length>0)?d.incomes.reduce((ss,e)=>ss+e.amount,0):d.income),0);const {monthly:taxMo}=calcPersonalTax(annualInc);
   const addIncome=(entry)=>{
     const newEntry={id:Date.now(),desc:entry.desc||"รายได้",amount:parseFloat(entry.amount),date:new Date().toLocaleDateString("th-TH")};
@@ -848,17 +855,8 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
     if(saveIncomeEntry)saveIncomeEntry(sel,updated);
   };
   const delIncome=(id,amount)=>{
-    setData(d=>d.map((r,i)=>{
-      if(i!==sel) return r;
-      const newIncomes=(r.incomes||[]).filter(e=>e.id!==id);
-      const newTotal=newIncomes.reduce((s,e)=>s+e.amount,0);
-      // Update monthly_data total in DB
-      if(userId){
-        supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
-        supabase.from('monthly_data').upsert({user_id:userId,month:sel,year:new Date().getFullYear(),income:newTotal},{onConflict:'user_id,month,year'});
-      }
-      return {...r,incomes:newIncomes,income:newTotal};
-    }));
+    setData(d=>d.map((r,i)=>i===sel?{...r,incomes:(r.incomes||[]).filter(e=>e.id!==id)}:r));
+    if(userId)supabase.from('income_entries').delete().eq('id',id).eq('user_id',userId);
   };
   const addExp=entry=>{setData(d=>d.map((r,i)=>i===sel?{...r,expenses:[...r.expenses,entry]}:r));if(saveExpense)saveExpense(sel,entry);};
   const updateExp=(updated)=>{
@@ -913,7 +911,87 @@ function MoneyTab({data,setData,userId,saveIncome,saveIncomeEntry,saveExpense,us
     }
     <div className="sec-hd"><span>📤 ค่าใช้จ่าย</span><button className="sec-add" onClick={()=>setSheet("expense")}>+ เพิ่ม</button></div>
     {m.expenses.length===0?<div className="empty-card" onClick={()=>setSheet("expense")}>ยังไม่มีค่าใช้จ่าย แตะเพื่อเพิ่ม →</div>:<>{m.expenses.map(e=><div className="exp-row" key={e.id}><span className="exp-cat-ico">{e.cat?.split(" ")[0]||"💸"}</span><div className="exp-info"><div className="exp-name">{e.desc}</div><div className="exp-cat">{e.cat||"ค่าใช้จ่าย"}</div></div><div className="exp-amt">−{fmt(e.amount)} ฿</div><button className="del-btn" style={{marginRight:2}} onClick={()=>setEditExpEntry(e)}>✏️</button><button className="del-btn" onClick={()=>delExp(e.id)}>🗑</button></div>)}<div className="exp-total">รวม <strong>{fmt(totalExp)} บาท</strong></div></>}
-    {totalInc>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`}><div className="net-label">{net>=0?"💚 เงินคงเหลือ":"🔴 รายจ่ายเกินรายได้"}</div><div className="net-val">{fmt(Math.abs(net))} บาท</div>{net>0&&<div className="net-hint">→ เอาไปวางแผนได้ในแท็บ "วางแผน"</div>}</div>}
+    {/* ── ออมเงิน/ลงทุนเดือนนี้ ── */}
+    <div className="sec-hd" style={{marginTop:4}}>
+      <span>💎 ออมเงิน/ลงทุนเดือนนี้</span>
+      <button className="sec-add" onClick={()=>setShowSaveSheet(true)}>+ เพิ่ม</button>
+    </div>
+    {selSavings.length===0
+      ?<div className="empty-card" onClick={()=>setShowSaveSheet(true)}>แตะเพื่อบันทึกการออมหรือลงทุนเดือนนี้ →</div>
+      :<div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:8}}>
+        {selSavings.map(r=><div key={r.id} style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,background:"#F5F0FF",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>💎</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#2C2510"}}>{r.note||"ออมเงิน"}</div>
+            <div style={{fontSize:10,color:"#A89660",marginTop:1}}>{r.date}</div>
+          </div>
+          <div style={{fontSize:14,fontWeight:800,color:"#7A4FA0"}}>−{fmt(r.amount)} ฿</div>
+          <button className="del-btn" onClick={()=>{setMonthSavingsLocal(prev=>prev.map((arr,i)=>i===sel?arr.filter(x=>x.id!==r.id):arr));}}>🗑</button>
+        </div>)}
+        <div style={{background:"#F5F0FF",border:"1.5px solid #C4AAFF",borderRadius:11,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#7A4FA0"}}>รวมออม/ลงทุน</span>
+          <span style={{fontSize:15,fontWeight:800,color:"#7A4FA0"}}>−{fmt(totalSelSavings)} ฿</span>
+        </div>
+      </div>
+    }
+
+    {/* ── ยอดคงเหลือจริง ── */}
+    {totalInc>0&&<div className={`net-card ${net>=0?"net-pos":"net-neg"}`} style={{marginBottom:8}}>
+      <div className="net-label">{net>=0?"💚 ยอดคงเหลือจริง":"🔴 รายจ่ายเกินรายได้"}</div>
+      <div className="net-val">{fmt(Math.abs(net))} บาท</div>
+      {totalInc>0&&<div style={{fontSize:11,color:"#A89660",marginTop:6,display:"flex",flexDirection:"column",gap:2}}>
+        <span>{fmt(totalInc)} − {fmt(totalExp)} (ค่าใช้จ่าย) − {fmt(totalSelSavings)} (ออม) = {fmt(net)} ฿</span>
+      </div>}
+    </div>}
+
+    {/* ── หมายเหตุประจำเดือน ── */}
+    <div className="sec-hd" style={{marginTop:4}}>
+      <span>📝 หมายเหตุประจำเดือน</span>
+      <button className="sec-add" onClick={()=>setShowNoteEdit(true)}>{selNote?"แก้ไข":"+ เพิ่ม"}</button>
+    </div>
+    {selNote
+      ?<div style={{background:"#FFF",border:"1.5px solid #EDE8D8",borderRadius:12,padding:"13px 14px",marginBottom:10,cursor:"pointer",position:"relative"}} onClick={()=>setShowNoteEdit(true)}>
+        <div style={{fontSize:13,color:"#2C2510",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{selNote}</div>
+        <div style={{fontSize:10,color:"#C4B88A",marginTop:6}}>แตะเพื่อแก้ไข</div>
+      </div>
+      :<div className="empty-card" onClick={()=>setShowNoteEdit(true)}>แตะเพื่อเขียนบันทึกประจำเดือน →</div>
+    }
+
+    {/* Note edit sheet */}
+    {showNoteEdit&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setShowNoteEdit(false);}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">📝 หมายเหตุเดือน {MONTH_FULL[sel]}</div>
+        <textarea className="sinp" rows={5} placeholder="บันทึกสิ่งที่เกิดขึ้นในเดือนนี้..." value={selNote}
+          onChange={e=>setMonthNotes(prev=>prev.map((n,i)=>i===sel?e.target.value:n))}
+          style={{resize:"none",height:140,fontFamily:"'Sarabun',sans-serif",lineHeight:1.7}}/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={()=>setShowNoteEdit(false)}>ปิด</button>
+          <button className="sbtn-s" onClick={()=>setShowNoteEdit(false)}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Save sheet */}
+    {showSaveSheet&&<div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setShowSaveSheet(false);}}>
+      <div className="sheet">
+        <div className="sheet-pill"/>
+        <div className="sheet-ttl">💎 บันทึกการออม/ลงทุน</div>
+        <input className="sinp" placeholder="รายละเอียด เช่น ซื้อกองทุน SSF" id="save-note-inp"/>
+        <input className="sinp sinp-lg" type="number" placeholder="จำนวนเงิน (บาท)" id="save-amt-inp"/>
+        <div className="sheet-btns" style={{marginTop:8}}>
+          <button className="sbtn-c" onClick={()=>setShowSaveSheet(false)}>ยกเลิก</button>
+          <button className="sbtn-s" onClick={()=>{
+            const note=document.getElementById("save-note-inp")?.value||"ออมเงิน";
+            const amt=parseFloat(document.getElementById("save-amt-inp")?.value||"0");
+            if(!amt)return;
+            const entry={id:Date.now(),note,amount:amt,date:new Date().toLocaleDateString("th-TH")};
+            setMonthSavingsLocal(prev=>prev.map((arr,i)=>i===sel?[...arr,entry]:arr));
+            setShowSaveSheet(false);
+          }}>บันทึก ✓</button>
+        </div>
+      </div>
+    </div>}
     {/* ── เอกสารรายได้ ── */}
     <div className="sec-hd" style={{marginTop:4}}>
       <span>📎 เอกสารรายได้เดือนนี้</span>
@@ -1693,6 +1771,8 @@ export default function App() {
   const [screen,setScreen]=useState("onboard");const [user,setUser]=useState(null);const [userId,setUserId]=useState(null);const [tab,setTab]=useState("learn");
   const [data,setData]=useState(initData());const [goals,setGoals]=useState([]);const [savings,setSavings]=useState({});
   const [docsState,setDocsState]=useState(Array.from({length:12},()=>[]));
+  const [monthNotes,setMonthNotes]=useState(Array.from({length:12},()=>""));
+  const [monthSavingsLocal,setMonthSavingsLocal]=useState(Array.from({length:12},()=>[]));
   const lang="th";
 
   // Auto-restore session
@@ -2313,7 +2393,7 @@ export default function App() {
     </div>
     <div style={{paddingBottom:84,width:"100%"}}>
     {tab==="learn"  &&<LearnTab/>}
-    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB}/>}
+    {tab==="money"  &&<MoneyTab data={data} setData={setData} userId={userId} saveIncome={saveIncome} saveIncomeEntry={saveIncomeEntry} saveExpense={saveExpense} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState} setDocsState={setDocsState} saveDocToDB={saveDocToDB} deleteDocFromDB={deleteDocFromDB} monthNotes={monthNotes} setMonthNotes={setMonthNotes} monthSavingsLocal={monthSavingsLocal} setMonthSavingsLocal={setMonthSavingsLocal}/>}
     {tab==="plan"   &&<PlanTab data={data} setData={setData} savings={savings} setSavings={setSavings} goals={goals} onDepositGoal={depositToGoal} userId={userId} saveGoalToDB={saveGoalToDB} saveSavingToDB={saveSavingToDB} deleteSavingFromDB={deleteSavingFromDB}/>}
     {tab==="goals"  &&<GoalsTab data={data} goals={goals} setGoals={setGoals} savings={savings} userId={userId} saveGoalToDB={saveGoalToDB}/>}
     {tab==="summary"&&<SummaryTab data={data} goals={goals} savings={savings} userPlan={userPlan} onPaywall={setPaywallFeature} docsState={docsState}/>}
