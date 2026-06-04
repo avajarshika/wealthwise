@@ -1098,7 +1098,7 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
               <svg width="130" height="130" viewBox="0 0 130 130">
                 <circle cx="65" cy="65" r="54" fill="none" stroke="#F5EFE0" strokeWidth="10"/>
                 <circle cx="65" cy="65" r="54" fill="none" stroke={color} strokeWidth="10"
-                  strokeDasharray={`${strokeDash} ${circumference}`}
+                  strokeDasharray={strokeDash + ' ' + circumference}
                   strokeLinecap="round"
                   transform="rotate(-90 65 65)"
                   style={{transition:"stroke-dasharray .8s ease"}}/>
@@ -1117,7 +1117,7 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
                   {label:"รายได้สม่ำเสมอ",val:Math.round(incScore),max:30,color:"#E8B84B"},
                 ].map(b=><div key={b.label} className="hc-bar-row">
                   <span className="hc-bar-label">{b.label}</span>
-                  <div className="hc-bar-track"><div className="hc-bar-fill" style={{width:`${(b.val/b.max)*100}%`,background:b.color}}/></div>
+                  <div className="hc-bar-track"><div className="hc-bar-fill" style={{width:((b.val/b.max)*100)+'%',background:b.color}}/></div>
                   <span className="hc-bar-score" style={{color:b.color}}>{b.val}/{b.max}</span>
                 </div>)}
               </div>
@@ -1129,8 +1129,7 @@ function PlanTab({data,setData,savings,setSavings,goals,onDepositGoal,userId,sav
           </div>
         </>;
       })()}
-    </div></div>
-      
+    </div>
     {grandTotal>0&&<div className="savings-bar-card"><div className="sbc-top"><span className="sbc-label">ออม/ลงทุนสะสมปีนี้</span><span className="sbc-total">{fmt(grandTotal)} ฿</span></div><div className="sbc-track">{INVEST_OPTIONS.map(o=>{const t=totalForOpt(o.id);if(!t)return null;return <div key={o.id} className="sbc-seg" style={{width:`${(t/grandTotal)*100}%`,background:o.color}}/>;})}</div></div>}
     <div className="sec-hd" style={{padding:"0 0 8px"}}><span>🌱 กดการ์ดเพื่อบันทึกการออม</span></div>
     <div className="invest-list">{INVEST_OPTIONS.map(opt=>{const total=totalForOpt(opt.id);const moTotal=(savings[opt.id]?.[NOW_MONTH]||[]).reduce((s,r)=>s+r.amount,0);const hasAny=total>0;return <div className="invest-card inv-tappable" key={opt.id} style={{borderColor:hasAny?opt.color+"88":opt.color+"33"}} onClick={()=>setOpenOpt(opt)}>
